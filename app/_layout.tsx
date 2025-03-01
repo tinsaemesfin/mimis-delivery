@@ -1,21 +1,37 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
+import { StyleSheet } from 'react-native';
+import { Stack } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 
-import { useColorScheme } from '@/hooks/useColorScheme';
+import { ThemeProvider, DarkTheme, DefaultTheme } from '@react-navigation/native';
+
+import { useColorScheme } from '../hooks/useColorScheme';
+import { useFonts } from 'expo-font';
+import { SplashScreen } from 'expo-router';
+
+export {
+  // Catch any errors thrown by the Layout component.
+  ErrorBoundary,
+} from 'expo-router';
+
+export const unstable_settings = {
+  // Ensure that reloading on `/modal` keeps a back button present.
+  initialRouteName: '(tabs)',
+};
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
-  const [loaded] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
+  const [loaded, error] = useFonts({
+    // ... any fonts you need
   });
+
+  // Expo Router uses Error Boundaries to catch errors in the navigation tree.
+  useEffect(() => {
+    if (error) throw error;
+  }, [error]);
 
   useEffect(() => {
     if (loaded) {
@@ -27,13 +43,19 @@ export default function RootLayout() {
     return null;
   }
 
+  return <RootLayoutNav />;
+}
+
+function RootLayoutNav() {
+  const colorScheme = useColorScheme();
+
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
+    <ThemeProvider value={DefaultTheme}>
+      <StatusBar style="dark" />
+      <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="+not-found" />
       </Stack>
-      <StatusBar style="auto" />
     </ThemeProvider>
   );
 }
