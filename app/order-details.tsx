@@ -269,3 +269,14 @@ const styles = StyleSheet.create({
     height: 56,
   },
 }); 
+
+
+
+// cutting style creating admin panel 
+// we sell only full lamb and sheep and goat the admin should be able to add animal type
+// admin export the data in excel file
+
+// if you want to track delivery please register.
+// allow people to divide the lamb
+
+// no piture of meat 
