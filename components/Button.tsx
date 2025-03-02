@@ -2,6 +2,7 @@ import React, { forwardRef } from 'react';
 import { TouchableOpacity, Text, StyleSheet, ViewStyle, TextStyle, ActivityIndicator } from 'react-native';
 import { Colors } from '../constants/Colors';
 import { useColorScheme } from '../hooks/useColorScheme';
+import { createShadow } from '../utils/styling';
 
 interface ButtonProps {
   title: string;
@@ -92,16 +93,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginVertical: 10,
     borderWidth: 0,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    ...createShadow('#000', { width: 0, height: 2 }, 0.1, 4, 3),
   },
   outlineButton: {
     borderWidth: 2,
     elevation: 0,
     shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
   },
   text: {
     fontSize: 18,

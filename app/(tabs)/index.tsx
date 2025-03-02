@@ -1,97 +1,129 @@
 import React from 'react';
-import { StyleSheet, Image, View, Text, SafeAreaView, TouchableOpacity, Dimensions, Platform } from 'react-native';
+import { 
+  StyleSheet, 
+  View, 
+  Text, 
+  Image, 
+  TouchableOpacity, 
+  ScrollView, 
+  Dimensions, 
+  SafeAreaView
+} from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { Link } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import Button from '../../components/Button';
 import { Colors } from '../../constants/Colors';
 import { useColorScheme } from '../../hooks/useColorScheme';
-import { LinearGradient } from 'expo-linear-gradient';
+import { createShadow, createTextShadow } from '../../utils/styling';
 
 const { width, height } = Dimensions.get('window');
 
 export default function HomeScreen() {
+  const router = useRouter();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme || 'light'];
 
+  const handleStartOrder = () => {
+    // Navigate to sign-in page
+    router.push('/sign-in');
+  };
+
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar style="dark" />
       
-      <View style={styles.heroSection}>
-        <Image
-          source={require('../../assets/images/meat-banner.png')}
-          style={styles.heroImage}
-          resizeMode="cover"
-        />
-        <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.7)', 'rgba(0,0,0,0.9)']}
-          style={styles.gradient}
-        />
-        <SafeAreaView style={styles.heroContent}>
-          <View style={styles.logoContainer}>
-            <Text style={styles.logoText}>M</Text>
-          </View>
-          <Text style={styles.title}>Mimi's Delivery</Text>
-          <Text style={styles.subtitle}>
-            Premium meat cuts delivered to your door
-          </Text>
-        </SafeAreaView>
-      </View>
-      
-      <SafeAreaView style={styles.contentSection}>
-        <View style={styles.infoContainer}>
-          <View style={styles.featureRow}>
-            <View style={[styles.featureIcon, { backgroundColor: colors.primary }]}>
-              <Text style={styles.featureIconText}>🥩</Text>
-            </View>
-            <View style={styles.featureText}>
-              <Text style={[styles.featureTitle, { color: colors.text }]}>Premium Selection</Text>
-              <Text style={[styles.featureDescription, { color: colors.lightText }]}>
-                Choose from our wide variety of quality meats
-              </Text>
-            </View>
-          </View>
-          
-          <View style={styles.featureRow}>
-            <View style={[styles.featureIcon, { backgroundColor: colors.primary }]}>
-              <Text style={styles.featureIconText}>✂️</Text>
-            </View>
-            <View style={styles.featureText}>
-              <Text style={[styles.featureTitle, { color: colors.text }]}>Custom Cuts</Text>
-              <Text style={[styles.featureDescription, { color: colors.lightText }]}>
-                Select your preferred cut styles and preparations
-              </Text>
-            </View>
-          </View>
-          
-          <View style={styles.featureRow}>
-            <View style={[styles.featureIcon, { backgroundColor: colors.primary }]}>
-              <Text style={styles.featureIconText}>🚚</Text>
-            </View>
-            <View style={styles.featureText}>
-              <Text style={[styles.featureTitle, { color: colors.text }]}>Fast Delivery</Text>
-              <Text style={[styles.featureDescription, { color: colors.lightText }]}>
-                Get your order delivered fresh to your doorstep
-              </Text>
-            </View>
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.heroSection}>
+          <Image 
+            source={require('../../assets/images/meat-banner.png')} 
+            style={styles.heroImage}
+            resizeMode="cover"
+          />
+          <LinearGradient
+            colors={['rgba(0,0,0,0.7)', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0)']}
+            style={styles.heroGradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+          />
+          <View style={styles.heroContent}>
+            <Text style={[styles.heroTitle, createTextShadow('rgba(0, 0, 0, 0.5)', { width: 0, height: 2 }, 3)]}>
+              Mimi's Delivery
+            </Text>
+            <Text style={[styles.heroSubtitle, createTextShadow('rgba(0, 0, 0, 0.5)', { width: 0, height: 1 }, 2)]}>
+              Premium Lamb & Sheep Delivery
+            </Text>
           </View>
         </View>
 
-        <Link href="/meat-selection" asChild>
-          <Button 
+        <View style={styles.contentContainer}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            Farm to Table. Directly to You.
+          </Text>
+          
+          <Text style={[styles.description, { color: colors.lightText }]}>
+            We deliver premium quality lamb and sheep directly from our farm to your doorstep. Each animal is carefully raised and prepared according to your preferences.
+          </Text>
+
+          <View style={styles.featuresContainer}>
+            <View style={[styles.featureRow, { backgroundColor: colors.card }]}>
+              <View style={[styles.featureIconContainer, { backgroundColor: colors.primary + '20' }]}>
+                <Ionicons name="paw" size={24} color={colors.primary} />
+              </View>
+              <View style={styles.featureTextContainer}>
+                <Text style={[styles.featureTitle, { color: colors.text }]}>Whole Animals</Text>
+                <Text style={[styles.featureDescription, { color: colors.lightText }]}>
+                  Choose from a variety of premium sheep and lamb
+                </Text>
+              </View>
+            </View>
+
+            <View style={[styles.featureRow, { backgroundColor: colors.card }]}>
+              <View style={[styles.featureIconContainer, { backgroundColor: colors.primary + '20' }]}>
+                <Ionicons name="cut" size={24} color={colors.primary} />
+              </View>
+              <View style={styles.featureTextContainer}>
+                <Text style={[styles.featureTitle, { color: colors.text }]}>Custom Cuts</Text>
+                <Text style={[styles.featureDescription, { color: colors.lightText }]}>
+                  Select your preferred cutting style and portions
+                </Text>
+              </View>
+            </View>
+
+            <View style={[styles.featureRow, { backgroundColor: colors.card }]}>
+              <View style={[styles.featureIconContainer, { backgroundColor: colors.primary + '20' }]}>
+                <Ionicons name="time" size={24} color={colors.primary} />
+              </View>
+              <View style={styles.featureTextContainer}>
+                <Text style={[styles.featureTitle, { color: colors.text }]}>Fast Delivery</Text>
+                <Text style={[styles.featureDescription, { color: colors.lightText }]}>
+                  Fresh meat delivered directly to your doorstep
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          <Button
             title="Start Your Order"
-            onPress={() => {}}
-            style={styles.startButton}
+            onPress={handleStartOrder}
+            style={styles.button}
           />
-        </Link>
-      </SafeAreaView>
-    </View>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
   heroSection: {
     height: height * 0.45,
@@ -102,90 +134,63 @@ const styles = StyleSheet.create({
     height: '100%',
     position: 'absolute',
   },
-  gradient: {
+  heroGradient: {
     position: 'absolute',
     left: 0,
     right: 0,
-    bottom: 0,
-    height: '70%',
+    top: 0,
+    height: '100%',
   },
   heroContent: {
+    padding: 20,
     position: 'absolute',
-    bottom: 0,
+    bottom: 40,
     left: 0,
     right: 0,
-    padding: 20,
-    paddingBottom: 30,
-    alignItems: 'center',
   },
-  logoContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#D50000',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 8,
-  },
-  logoText: {
+  heroTitle: {
     fontSize: 36,
     fontWeight: 'bold',
     color: 'white',
+    marginBottom: 10,
   },
-  title: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    color: 'white',
-    textAlign: 'center',
-    marginBottom: 8,
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
-  },
-  subtitle: {
+  heroSubtitle: {
     fontSize: 18,
     color: 'white',
-    textAlign: 'center',
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
   },
-  contentSection: {
-    flex: 1,
+  contentContainer: {
     padding: 20,
-    paddingTop: 30,
   },
-  infoContainer: {
-    flex: 1,
-    marginBottom: 20,
+  sectionTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 16,
+  },
+  description: {
+    fontSize: 16,
+    lineHeight: 24,
+    marginBottom: 24,
+  },
+  featuresContainer: {
+    marginBottom: 30,
   },
   featureRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    ...createShadow(),
   },
-  featureIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+  featureIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 4,
   },
-  featureIconText: {
-    fontSize: 22,
-  },
-  featureText: {
+  featureTextContainer: {
     flex: 1,
   },
   featureTitle: {
@@ -197,9 +202,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
-  startButton: {
-    width: '100%',
-    marginBottom: Platform.OS === 'ios' ? 0 : 20,
-    height: 60,
+  button: {
+    height: 56,
   },
 });

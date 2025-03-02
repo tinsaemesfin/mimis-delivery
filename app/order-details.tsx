@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, 
   SafeAreaView, 
@@ -9,7 +9,9 @@ import {
   Platform, 
   TouchableOpacity,
   Keyboard,
-  TouchableWithoutFeedback
+  TouchableWithoutFeedback,
+  FlatList,
+  Alert
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -18,64 +20,60 @@ import Input from '../components/Input';
 import { Colors } from '../constants/Colors';
 import { useColorScheme } from '../hooks/useColorScheme';
 import { Ionicons } from '@expo/vector-icons';
+import { createShadow } from '../utils/styling';
 
-interface FormData {
-  name: string;
-  phone: string;
-  address: string;
-}
+// Mock data for cutting styles - in the real app, this would come from your database
+const cuttingStyles = [
+  { id: '1', name: 'Standard', description: 'Basic cuts including legs, shoulders, and chops' },
+  { id: '2', name: 'Premium', description: 'Specialized cuts with more detail and precision' },
+  { id: '3', name: 'Custom', description: 'Tell us exactly how you want your meat prepared' },
+];
 
-interface FormErrors {
-  name?: string;
-  phone?: string;
-  address?: string;
-}
+// Mock data for delivery dates - in the real app, this would come from your database
+const availableDeliveryDates = [
+  { id: '1', date: 'July 15, 2023', available: true },
+  { id: '2', date: 'July 16, 2023', available: true },
+  { id: '3', date: 'July 17, 2023', available: true },
+  { id: '4', date: 'July 18, 2023', available: false },
+  { id: '5', date: 'July 19, 2023', available: true },
+];
 
 export default function OrderDetailsScreen() {
-  const { meatType, cutType, styleType } = useLocalSearchParams();
+  const { animalType, animalSize } = useLocalSearchParams();
   const router = useRouter();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme || 'light'];
 
-  const [formData, setFormData] = useState<FormData>({
-    name: '',
-    phone: '',
-    address: '',
-  });
+  const [cuttingStyle, setCuttingStyle] = useState('');
+  const [divided, setDivided] = useState(false);
+  const [deliveryDate, setDeliveryDate] = useState('');
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [address, setAddress] = useState('');
+  
+  // Define the Record type explicitly
+  const [errors, setErrors] = useState<{
+    cuttingStyle?: string;
+    deliveryDate?: string;
+    name?: string;
+    phone?: string;
+    address?: string;
+  }>({});
 
-  const [errors, setErrors] = useState<FormErrors>({});
-
-  const handleChange = (field: keyof FormData, value: string) => {
-    setFormData({
-      ...formData,
-      [field]: value,
-    });
+  const validateForm = () => {
+    const newErrors: {
+      cuttingStyle?: string;
+      deliveryDate?: string;
+      name?: string;
+      phone?: string;
+      address?: string;
+    } = {};
     
-    // Clear error when user types
-    if (errors[field]) {
-      setErrors({
-        ...errors,
-        [field]: undefined,
-      });
-    }
-  };
-
-  const validateForm = (): boolean => {
-    const newErrors: FormErrors = {};
-    
-    if (!formData.name.trim()) {
-      newErrors.name = 'Name is required';
-    }
-    
-    if (!formData.phone.trim()) {
-      newErrors.phone = 'Phone number is required';
-    } else if (!/^\d{10,}$/.test(formData.phone.replace(/\D/g, ''))) {
-      newErrors.phone = 'Please enter a valid phone number';
-    }
-    
-    if (!formData.address.trim()) {
-      newErrors.address = 'Address is required';
-    }
+    if (!cuttingStyle) newErrors.cuttingStyle = 'Please select a cutting style';
+    if (!deliveryDate) newErrors.deliveryDate = 'Please select a delivery date';
+    if (!name.trim()) newErrors.name = 'Name is required';
+    if (!phone.trim()) newErrors.phone = 'Phone number is required';
+    if (!address.trim()) newErrors.address = 'Address is required';
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -83,34 +81,89 @@ export default function OrderDetailsScreen() {
 
   const handleSubmit = () => {
     if (validateForm()) {
-      router.push({
+      router.navigate({
         pathname: '/order-confirmation',
         params: {
-          meatType,
-          cutType,
-          styleType,
-          ...formData,
-        },
+          animalType,
+          animalSize,
+          cuttingStyle,
+          divided: divided ? 'Yes' : 'No',
+          deliveryDate,
+          name,
+          phone,
+          address
+        }
       });
+    } else {
+      Alert.alert('Please fill in all required fields');
     }
   };
 
+  const renderCuttingStyleItem = ({ item }: { item: typeof cuttingStyles[0] }) => (
+    <TouchableOpacity
+      style={[
+        styles.styleOption,
+        { 
+          backgroundColor: cuttingStyle === item.name ? colors.primary + '20' : colors.card,
+          borderColor: cuttingStyle === item.name ? colors.primary : colors.border 
+        },
+        createShadow(colors.text, { width: 0, height: 1 }, 0.05, 2)
+      ]}
+      onPress={() => setCuttingStyle(item.name)}
+    >
+      <View style={styles.styleContent}>
+        {cuttingStyle === item.name && (
+          <Ionicons name="checkmark-circle" size={20} color={colors.primary} style={styles.checkIcon} />
+        )}
+        <Text style={[styles.styleName, { color: colors.text }]}>{item.name}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+
+  const renderDeliveryDateItem = ({ item }: { item: typeof availableDeliveryDates[0] }) => (
+    <TouchableOpacity
+      style={[
+        styles.dateOption,
+        { 
+          backgroundColor: deliveryDate === item.date ? colors.primary + '20' : colors.card,
+          borderColor: deliveryDate === item.date ? colors.primary : colors.border,
+          opacity: item.available ? 1 : 0.5,
+          ...(item.available ? {} : { opacity: 0.5 })
+        },
+        createShadow(colors.text, { width: 0, height: 1 }, 0.05, 2)
+      ]}
+      onPress={() => item.available && setDeliveryDate(item.date)}
+      disabled={!item.available}
+    >
+      <View style={styles.dateContent}>
+        {deliveryDate === item.date && (
+          <Ionicons name="checkmark-circle" size={20} color={colors.primary} style={styles.checkIcon} />
+        )}
+        <Text style={[styles.dateName, { color: colors.text }]}>{item.date}</Text>
+        {!item.available && (
+          <Text style={styles.unavailableText}>Unavailable</Text>
+        )}
+      </View>
+    </TouchableOpacity>
+  );
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar style="dark" />
+      <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
       
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <KeyboardAvoidingView 
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={{ flex: 1 }}
           keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 0}
         >
           <View style={styles.headerContainer}>
             <View style={styles.header}>
-              <Text style={[styles.title, { color: colors.text }]}>Your Details</Text>
-              <Text style={[styles.subtitle, { color: colors.lightText }]}>
-                Please provide your delivery information
-              </Text>
+              <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                <Ionicons name="arrow-back" size={24} color={colors.text} />
+              </TouchableOpacity>
+              <Text style={[styles.title, { color: colors.text }]}>Order Details</Text>
+              <View style={styles.rightPlaceholder} />
             </View>
           </View>
 
@@ -122,25 +175,96 @@ export default function OrderDetailsScreen() {
             <View style={[styles.orderSummary, { backgroundColor: colorScheme === 'dark' ? colors.card : 'rgba(0,0,0,0.03)' }]}>
               <Text style={[styles.summaryTitle, { color: colors.text }]}>Order Summary</Text>
               <View style={styles.summaryRow}>
-                <Text style={[styles.summaryLabel, { color: colors.lightText }]}>Meat:</Text>
-                <Text style={[styles.summaryValue, { color: colors.text }]}>{meatType as string}</Text>
+                <Text style={[styles.summaryLabel, { color: colors.lightText }]}>Animal:</Text>
+                <Text style={[styles.summaryValue, { color: colors.text }]}>{animalType as string}</Text>
               </View>
               <View style={styles.summaryRow}>
-                <Text style={[styles.summaryLabel, { color: colors.lightText }]}>Cut:</Text>
-                <Text style={[styles.summaryValue, { color: colors.text }]}>{cutType as string}</Text>
+                <Text style={[styles.summaryLabel, { color: colors.lightText }]}>Size:</Text>
+                <Text style={[styles.summaryValue, { color: colors.text }]}>{animalSize as string}</Text>
               </View>
-              <View style={styles.summaryRow}>
-                <Text style={[styles.summaryLabel, { color: colors.lightText }]}>Style:</Text>
-                <Text style={[styles.summaryValue, { color: colors.text }]}>{styleType as string}</Text>
+            </View>
+
+            <View style={styles.sectionContainer}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Cutting Style</Text>
+              <Text style={[styles.sectionDescription, { color: colors.lightText }]}>Select how you would like your meat to be cut</Text>
+              <FlatList
+                data={cuttingStyles}
+                renderItem={renderCuttingStyleItem}
+                keyExtractor={(item) => item.id}
+                horizontal={false}
+                scrollEnabled={false}
+              />
+            </View>
+
+            <View style={styles.sectionContainer}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Divide Animal?</Text>
+              <Text style={[styles.sectionDescription, { color: colors.lightText }]}>
+                Would you like to divide the animal in two parts?
+              </Text>
+              
+              <View style={styles.divideOptions}>
+                <TouchableOpacity
+                  style={[
+                    styles.divideOption,
+                    { 
+                      backgroundColor: !divided ? colors.primary : 'transparent',
+                      borderColor: colors.primary
+                    },
+                    createShadow(colors.text, { width: 0, height: 1 }, 0.05, 2)
+                  ]}
+                  onPress={() => setDivided(false)}
+                >
+                  <Text 
+                    style={[
+                      styles.divideOptionText, 
+                      { color: !divided ? 'white' : colors.primary }
+                    ]}
+                  >
+                    No, Keep Whole
+                  </Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[
+                    styles.divideOption,
+                    { 
+                      backgroundColor: divided ? colors.primary : 'transparent',
+                      borderColor: colors.primary
+                    },
+                    createShadow(colors.text, { width: 0, height: 1 }, 0.05, 2)
+                  ]}
+                  onPress={() => setDivided(true)}
+                >
+                  <Text 
+                    style={[
+                      styles.divideOptionText, 
+                      { color: divided ? 'white' : colors.primary }
+                    ]}
+                  >
+                    Yes, Divide in Two
+                  </Text>
+                </TouchableOpacity>
               </View>
+            </View>
+
+            <View style={styles.sectionContainer}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Delivery Date</Text>
+              <Text style={[styles.sectionDescription, { color: colors.lightText }]}>Select your preferred delivery date</Text>
+              <FlatList
+                data={availableDeliveryDates}
+                renderItem={renderDeliveryDateItem}
+                keyExtractor={(item) => item.id}
+                horizontal={false}
+                scrollEnabled={false}
+              />
             </View>
 
             <View style={styles.form}>
               <Input
                 label="Your Name"
                 placeholder="Enter your full name"
-                value={formData.name}
-                onChangeText={(text) => handleChange('name', text)}
+                value={name}
+                onChangeText={setName}
                 error={errors.name}
                 icon={<Ionicons name="person-outline" size={20} color={colors.primary} />}
               />
@@ -149,8 +273,8 @@ export default function OrderDetailsScreen() {
                 label="Phone Number"
                 placeholder="Enter your phone number"
                 keyboardType="phone-pad"
-                value={formData.phone}
-                onChangeText={(text) => handleChange('phone', text)}
+                value={phone}
+                onChangeText={setPhone}
                 error={errors.phone}
                 icon={<Ionicons name="call-outline" size={20} color={colors.primary} />}
               />
@@ -162,8 +286,8 @@ export default function OrderDetailsScreen() {
                 numberOfLines={4}
                 textAlignVertical="top"
                 style={styles.addressInput}
-                value={formData.address}
-                onChangeText={(text) => handleChange('address', text)}
+                value={address}
+                onChangeText={setAddress}
                 error={errors.address}
                 icon={<Ionicons name="location-outline" size={20} color={colors.primary} />}
               />
@@ -238,7 +362,73 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     textTransform: 'capitalize',
   },
+  sectionContainer: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  sectionDescription: {
+    fontSize: 14,
+    marginBottom: 12,
+  },
+  styleOption: {
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 16,
+    marginBottom: 10,
+  },
+  styleContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  styleName: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  dateOption: {
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 16,
+    marginBottom: 10,
+  },
+  dateContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  dateName: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  unavailableText: {
+    fontSize: 14,
+    color: '#F44336',
+    marginLeft: 'auto',
+  },
+  checkIcon: {
+    marginRight: 8,
+  },
+  divideOptions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 10,
+  },
+  divideOption: {
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 12,
+    flex: 1,
+    marginHorizontal: 5,
+    alignItems: 'center',
+  },
+  divideOptionText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
   form: {
+    marginTop: 10,
     marginBottom: 24,
   },
   addressInput: {
@@ -267,6 +457,15 @@ const styles = StyleSheet.create({
   button: {
     width: '100%',
     height: 56,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rightPlaceholder: {
+    width: 40,
   },
 }); 
 

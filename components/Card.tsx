@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, ImageSourcePropType, ViewStyle, Dimensions } from 'react-native';
 import { Colors } from '../constants/Colors';
 import { useColorScheme } from '../hooks/useColorScheme';
+import { createShadow } from '../utils/styling';
 
 interface CardProps {
   title: string;
@@ -25,6 +26,11 @@ const Card: React.FC<CardProps> = ({
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme || 'light'];
 
+  const shadowColor = selected ? colors.primary : '#000';
+  const shadowOpacity = selected ? 0.25 : 0.15;
+  const shadowRadius = selected ? 10 : 6;
+  const elevation = selected ? 8 : 4;
+
   return (
     <TouchableOpacity
       style={[
@@ -32,7 +38,7 @@ const Card: React.FC<CardProps> = ({
         { 
           backgroundColor: colors.card, 
           borderColor: selected ? colors.primary : 'transparent',
-          shadowColor: selected ? colors.primary : '#000',
+          ...createShadow(shadowColor, { width: 0, height: 2 }, shadowOpacity, shadowRadius, elevation)
         },
         selected && styles.selectedCard,
         style,
@@ -80,16 +86,9 @@ const styles = StyleSheet.create({
     marginVertical: 10,
     marginHorizontal: 2,
     overflow: 'hidden',
-    elevation: 4,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
     borderWidth: 2,
   },
   selectedCard: {
-    elevation: 8,
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
     transform: [{ scale: 1.02 }],
   },
   imageContainer: {

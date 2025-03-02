@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TextInput, StyleSheet, TextInputProps, ViewStyle, Platform } from 'react-native';
 import { Colors } from '../constants/Colors';
 import { useColorScheme } from '../hooks/useColorScheme';
+import { createShadow } from '../utils/styling';
 
 interface InputProps extends TextInputProps {
   label: string;
@@ -32,7 +33,8 @@ const Input: React.FC<InputProps> = ({
               color: colors.text,
               backgroundColor: error ? 'rgba(255, 0, 0, 0.03)' : colors.card,
               borderColor: error ? '#FF0000' : colors.border,
-              paddingLeft: icon ? 44 : 16
+              paddingLeft: icon ? 44 : 16,
+              ...createShadow('rgba(0,0,0,0.05)', { width: 0, height: 2 }, 1, 2, 2),
             }
           ]}
           placeholderTextColor={colors.lightText}
@@ -76,17 +78,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 16,
     fontSize: 16,
-    ...Platform.select({
-      ios: {
-        shadowColor: 'rgba(0,0,0,0.05)',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 1,
-        shadowRadius: 2,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
   },
   errorText: {
     color: '#FF0000',
