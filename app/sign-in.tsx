@@ -35,7 +35,7 @@ export default function SignInScreen() {
       await new Promise(resolve => setTimeout(resolve, 1500));
       
       // Navigate to Home screen after successful login
-      router.replace('/');
+      router.replace('/(tabs)');
     } catch (error) {
       console.error('Google sign in error:', error);
     } finally {
@@ -44,8 +44,8 @@ export default function SignInScreen() {
   };
   
   const handleContinueAsGuest = () => {
-    // Navigate to animal selection screen instead of going back to home
-    router.replace('/animal-selection');
+    // Navigate to home screen
+    router.replace('/(tabs)');
   };
   
   return (

@@ -25,8 +25,8 @@ import { createShadow } from '../utils/styling';
 // Mock data for cutting styles - in the real app, this would come from your database
 const cuttingStyles = [
   { id: '1', name: 'Standard', description: 'Basic cuts including legs, shoulders, and chops' },
-  { id: '2', name: 'Premium', description: 'Specialized cuts with more detail and precision' },
-  { id: '3', name: 'Custom', description: 'Tell us exactly how you want your meat prepared' },
+  { id: '2', name: 'Ethiopian', description: 'Specialized cuts with more detail and precision' },
+  { id: '3', name: 'Mexican', description: 'Tell us exactly how you want your meat prepared' },
 ];
 
 // Mock data for delivery dates - in the real app, this would come from your database
@@ -153,20 +153,11 @@ export default function OrderDetailsScreen() {
       
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <KeyboardAvoidingView 
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          behavior={Platform.OS === "ios" || 'android' ? "padding" : "height"}
           style={{ flex: 1 }}
-          keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 0}
+          keyboardVerticalOffset={Platform.OS === "ios" || "android" ? 64 : 0}
         >
-          <View style={styles.headerContainer}>
-            <View style={styles.header}>
-              <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                <Ionicons name="arrow-back" size={24} color={colors.text} />
-              </TouchableOpacity>
-              <Text style={[styles.title, { color: colors.text }]}>Order Details</Text>
-              <View style={styles.rightPlaceholder} />
-            </View>
-          </View>
-
+         
           <ScrollView 
             style={styles.scrollView} 
             contentContainerStyle={[styles.scrollContent, { paddingBottom: 120 }]}
@@ -478,4 +469,14 @@ const styles = StyleSheet.create({
 // if you want to track delivery please register.
 // allow people to divide the lamb
 
-// no piture of meat 
+
+
+
+// Comments on MArch 05
+// after selecting size to be able to select price 
+// for each size different kind of price
+
+
+// yemifelgetun organs endimertu masederegu
+// roadwarrior integration  and notes 
+// 70 miles radius on gthe adress check box 

@@ -26,18 +26,18 @@ const { width } = Dimensions.get('window');
 // Mock data for animals
 const animals = [
   {
-    id: 'lamb',
+    id: '1',
     title: 'Lamb',
     description: 'Young sheep, tender meat with a mild flavor.',
     image: require('../assets/images/meat-banner.png'),
-    sizes: ['small', 'medium', 'large']
+    sizes: ['Small', 'Medium', 'Large']
   },
   {
-    id: 'sheep',
+    id: '2',
     title: 'Sheep',
     description: 'Adult sheep with richer flavor and firmer texture.',
     image: require('../assets/images/meat-banner.png'),
-    sizes: ['medium', 'large']
+    sizes: ['Medium', 'Large']
   }
 ];
 
@@ -60,10 +60,12 @@ export default function AnimalSelectionScreen() {
   
   const handleNextStep = () => {
     if (selectedAnimal && selectedSize) {
+      const animal = animals.find(a => a.id === selectedAnimal);
       router.push({
-        pathname: '/order-details',
+        pathname: '/price-selection',
         params: {
-          animalType: selectedAnimal,
+          animalId: selectedAnimal,
+          animalType: animal?.title || '',
           animalSize: selectedSize
         }
       });
@@ -104,7 +106,7 @@ export default function AnimalSelectionScreen() {
         { color: colors.text },
         selectedSize === item && styles.selectedSizeText
       ]}>
-        {item.charAt(0).toUpperCase() + item.slice(1)}
+        {item}
       </Text>
     </TouchableOpacity>
   );
@@ -112,14 +114,7 @@ export default function AnimalSelectionScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
-      
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Select Animal</Text>
-        <View style={styles.placeholder} />
-      </View>
+   
       
       <ScrollView
         style={styles.scrollView}

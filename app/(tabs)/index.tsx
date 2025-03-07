@@ -26,8 +26,8 @@ export default function HomeScreen() {
   const colors = Colors[colorScheme || 'light'];
 
   const handleStartOrder = () => {
-    // Navigate to sign-in page
-    router.push('/sign-in');
+    // Navigate directly to animal selection
+    router.push('/animal-selection');
   };
 
   return (

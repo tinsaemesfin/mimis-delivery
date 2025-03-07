@@ -13,13 +13,14 @@ export {
 } from 'expo-router';
 
 export const unstable_settings = {
-  // Ensure that reloading on `/modal` keeps a back button present.
-  initialRouteName: '(tabs)',
+  // Ensure any route can link back to `/`
+  initialRouteName: 'index',
 };
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
+// This ensures the sign-in screen appears first
 export default function RootLayout() {
   const [loaded, error] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
@@ -50,27 +51,34 @@ function RootLayoutNav() {
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="sign-in" options={{ 
+        <Stack.Screen name="index" options={{ headerShown: false }} />
+        <Stack.Screen name="sign-in" options={{ headerShown: false }} />
+        <Stack.Screen name="(tabs)" options={{ 
           headerShown: false,
-          animation: 'slide_from_right',
+          gestureEnabled: false, // Prevent going back to sign-in
         }} />
         <Stack.Screen name="animal-selection" options={{ 
           title: 'Select Animal',
-          headerBackTitle: 'Home',
+          headerBackTitle: 'Back',
+          animation: 'slide_from_right',
+          
+        }} />
+        <Stack.Screen name="price-selection" options={{ 
+          title: 'Select Package',
+          headerBackTitle: 'Back',
           animation: 'slide_from_right',
         }} />
         <Stack.Screen name="order-details" options={{ 
           title: 'Order Details',
           headerBackTitle: 'Back',
           animation: 'slide_from_right',
-          // Reset the navigation stack to prevent going back through all screens
           presentation: 'modal',
+
         }} />
         <Stack.Screen name="order-confirmation" options={{ 
           headerShown: false,
-          // Reset the navigation stack to prevent going back through all screens 
           presentation: 'modal',
+
         }} />
       </Stack>
     </ThemeProvider>
