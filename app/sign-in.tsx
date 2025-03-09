@@ -7,7 +7,8 @@ import {
   TouchableOpacity, 
   Image,
   Platform,
-  Dimensions
+  Dimensions,
+  ActivityIndicator
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
@@ -16,6 +17,7 @@ import { Colors } from '../constants/Colors';
 import { useColorScheme } from '../hooks/useColorScheme';
 import { Ionicons } from '@expo/vector-icons';
 import { createShadow } from '../utils/styling';
+import { useAuth } from '../lib/auth/AuthContext';
 
 const { width, height } = Dimensions.get('window');
 
@@ -23,31 +25,47 @@ export default function SignInScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme || 'light'];
+  const { signInWithGoogle, signInWithApple } = useAuth();
+  const [loading, setLoading] = useState(false);
   
-  const [isLoading, setIsLoading] = useState(false);
-  
-  const handleSignInWithGoogle = async () => {
-    setIsLoading(true);
-    
+  const handleGoogleSignIn = async () => {
     try {
-      // In a real app, here you would use the Google Authentication SDK
-      // For this mock, we'll just simulate a successful login
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // Navigate to Home screen after successful login
-      router.replace('/(tabs)');
+      setLoading(true);
+      await signInWithGoogle();
+      router.replace('/');
     } catch (error) {
-      console.error('Google sign in error:', error);
+      console.error('Error signing in with Google:', error);
+      // You might want to show an error message to the user
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
-  
-  const handleContinueAsGuest = () => {
-    // Navigate to home screen
-    router.replace('/(tabs)');
+
+  const handleAppleSignIn = async () => {
+    try {
+      setLoading(true);
+      await signInWithApple();
+      router.replace('/');
+    } catch (error) {
+      console.error('Error signing in with Apple:', error);
+      // You might want to show an error message to the user
+    } finally {
+      setLoading(false);
+    }
   };
-  
+
+  const handleContinueAsGuest = () => {
+    router.replace('/');
+  };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar style="light" />
@@ -70,8 +88,7 @@ export default function SignInScreen() {
         <View style={styles.authContainer}>
           <TouchableOpacity
             style={[styles.googleButton, { borderColor: colors.border }, createShadow(colors.text, { width: 0, height: 2 }, 0.1, 3)]}
-            onPress={handleSignInWithGoogle}
-            disabled={isLoading}
+            onPress={handleGoogleSignIn}
           >
             <Image
               source={require('../assets/images/google-logo.png')}
@@ -79,9 +96,25 @@ export default function SignInScreen() {
               resizeMode="contain"
             />
             <Text style={[styles.googleButtonText, { color: colors.text }]}>
-              {isLoading ? 'Signing in...' : 'Sign in with Google'}
+              Continue with Google
             </Text>
           </TouchableOpacity>
+          
+          {Platform.OS === 'ios' && (
+            <TouchableOpacity
+              style={[styles.appleButton, { borderColor: colors.border }, createShadow(colors.text, { width: 0, height: 2 }, 0.1, 3)]}
+              onPress={handleAppleSignIn}
+            >
+              <Image
+                source={require('../assets/images/apple-logo.png')}
+                style={styles.appleLogo}
+                resizeMode="contain"
+              />
+              <Text style={[styles.appleButtonText, { color: colors.text }]}>
+                Continue with Apple
+              </Text>
+            </TouchableOpacity>
+          )}
           
           <View style={styles.dividerContainer}>
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
@@ -202,5 +235,24 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     zIndex: 0,
-  }
+  },
+  appleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 56,
+    borderRadius: 12,
+    backgroundColor: 'white',
+    borderWidth: 1,
+    marginBottom: 20,
+  },
+  appleLogo: {
+    width: 24,
+    height: 24,
+    marginRight: 12,
+  },
+  appleButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
 }); 

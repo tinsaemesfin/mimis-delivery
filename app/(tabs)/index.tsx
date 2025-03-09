@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { 
   StyleSheet, 
   View, 
@@ -17,6 +17,7 @@ import Button from '../../components/Button';
 import { Colors } from '../../constants/Colors';
 import { useColorScheme } from '../../hooks/useColorScheme';
 import { createShadow, createTextShadow } from '../../utils/styling';
+import { supabase } from '@/lib/supabase';
 
 const { width, height } = Dimensions.get('window');
 
@@ -24,6 +25,23 @@ export default function HomeScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme || 'light'];
+
+  useEffect(() => {
+    const testConnection = async () => {
+      const { data, error } = await supabase
+        .from('animals')
+        .select('*')
+        .limit(1);
+      
+      if (error) {
+        console.error('Supabase connection error:', error);
+      } else {
+        console.log('Supabase connection successful:', data);
+      }
+    };
+  
+    testConnection();
+  }, []);
 
   const handleStartOrder = () => {
     // Navigate directly to animal selection
