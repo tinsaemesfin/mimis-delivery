@@ -6,6 +6,8 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 
 import { useColorScheme } from '../hooks/useColorScheme';
+import Auth from './components/auth/Auth';
+import Account from './components/auth/Account';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -81,6 +83,7 @@ function RootLayoutNav() {
 
         }} />
       </Stack>
+      {/* <Auth /> */}
     </ThemeProvider>
   );
 }
