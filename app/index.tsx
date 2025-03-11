@@ -1,32 +1,27 @@
-// import { Redirect } from 'expo-router';
+import { Redirect } from 'expo-router';
+import { useAuth } from '../lib/auth/AuthContext';
+import { View, ActivityIndicator } from 'react-native';
+import { Colors } from '../constants/Colors';
+import { useColorScheme } from '../hooks/useColorScheme';
 
-// export default function Index() {
-//   return <Redirect href="/sign-in" />;
-// } 
+export default function Index() {
+  const { user, loading } = useAuth();
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme || 'light'];
 
-import { useState, useEffect } from 'react'
-import { supabase } from '@/utils/supabase'
-import Auth from '@/app/components/auth/Auth'
-import Account from '@/app/components/auth/Account'
-import { View } from 'react-native'
-import { Session } from '@supabase/supabase-js'
+  // Show loading indicator while checking authentication status
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
 
-export default function App() {
-  const [session, setSession] = useState<Session | null>(null)
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-    })
-
-    supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session)
-    })
-  }, [])
-
-  return (
-    <View>
-      {session && session.user ? <Account key={session.user.id} session={session} /> : <Auth />}
-    </View>
-  )
+  // Redirect based on authentication status
+  if (user) {
+    return <Redirect href="/(tabs)" />;
+  } else {
+    return <Redirect href="/sign-in" />;
+  }
 }

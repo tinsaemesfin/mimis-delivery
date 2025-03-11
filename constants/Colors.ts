@@ -21,6 +21,7 @@ export const Colors = {
     icon: '#687076',
     tabIconDefault: '#687076',
     tabIconSelected: primaryLight,
+    error: '#FF3B30',
   },
   dark: {
     primary: primaryDark,
@@ -34,5 +35,6 @@ export const Colors = {
     icon: '#9BA1A6',
     tabIconDefault: '#9BA1A6',
     tabIconSelected: primaryDark,
+    error: '#FF453A',
   },
 };

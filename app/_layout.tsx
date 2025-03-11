@@ -4,6 +4,7 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
+import { AuthProvider } from '../lib/auth/AuthContext';
 
 import { useColorScheme } from '../hooks/useColorScheme';
 import Auth from './components/auth/Auth';
@@ -51,39 +52,48 @@ function RootLayoutNav() {
   const colorScheme = useColorScheme();
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="index" options={{ headerShown: false }} />
-        <Stack.Screen name="sign-in" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ 
-          headerShown: false,
-          gestureEnabled: false, // Prevent going back to sign-in
-        }} />
-        <Stack.Screen name="animal-selection" options={{ 
-          title: 'Select Animal',
-          headerBackTitle: 'Back',
-          animation: 'slide_from_right',
-          
-        }} />
-        <Stack.Screen name="price-selection" options={{ 
-          title: 'Select Package',
-          headerBackTitle: 'Back',
-          animation: 'slide_from_right',
-        }} />
-        <Stack.Screen name="order-details" options={{ 
-          title: 'Order Details',
-          headerBackTitle: 'Back',
-          animation: 'slide_from_right',
-          presentation: 'modal',
+    <AuthProvider>
+      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <Stack>
+          <Stack.Screen name="index" options={{ headerShown: false }} />
+          <Stack.Screen name="sign-in" options={{ headerShown: false }} />
+          <Stack.Screen name="(tabs)" options={{ 
+            headerShown: false,
+            gestureEnabled: false, // Prevent going back to sign-in
+          }} />
+          <Stack.Screen name="animal-selection" options={{ 
+            title: 'Select Animal',
+            headerBackTitle: 'Back',
+            animation: 'slide_from_right',
+            
+          }} />
+          <Stack.Screen name="price-selection" options={{ 
+            title: 'Select Package',
+            headerBackTitle: 'Back',
+            animation: 'slide_from_right',
+          }} />
+          <Stack.Screen name="order-details" options={{ 
+            title: 'Order Details',
+            headerBackTitle: 'Back',
+            animation: 'slide_from_right',
+            presentation: 'modal',
 
-        }} />
-        <Stack.Screen name="order-confirmation" options={{ 
-          headerShown: false,
-          presentation: 'modal',
+          }} />
+          <Stack.Screen name="order-confirmation" options={{ 
+            headerShown: false,
+            presentation: 'modal',
 
-        }} />
-      </Stack>
-      {/* <Auth /> */}
-    </ThemeProvider>
+          }} />
+          <Stack.Screen
+            name="test-auth"
+            options={{
+              title: 'Test Authentication',
+              headerShown: true,
+            }}
+          />
+        </Stack>
+        {/* <Auth /> */}
+      </ThemeProvider>
+    </AuthProvider>
   );
 }

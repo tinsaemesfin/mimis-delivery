@@ -7,7 +7,8 @@ import {
   TouchableOpacity, 
   ScrollView, 
   Dimensions, 
-  SafeAreaView
+  SafeAreaView,
+  Platform
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -34,86 +35,101 @@ export default function HomeScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar style="dark" />
       
-      <ScrollView 
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.heroSection}>
-          <Image 
-            source={require('../../assets/images/meat-banner.png')} 
-            style={styles.heroImage}
-            resizeMode="cover"
-          />
-          <LinearGradient
-            colors={['rgba(0,0,0,0.7)', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0)']}
-            style={styles.heroGradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-          />
-          <View style={styles.heroContent}>
-            <Text style={[styles.heroTitle, createTextShadow('rgba(0, 0, 0, 0.5)', { width: 0, height: 2 }, 3)]}>
-              Mimi's Delivery
-            </Text>
-            <Text style={[styles.heroSubtitle, createTextShadow('rgba(0, 0, 0, 0.5)', { width: 0, height: 1 }, 2)]}>
-              Premium Lamb & Sheep Delivery
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.contentContainer}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            Farm to Table. Directly to You.
-          </Text>
-          
-          <Text style={[styles.description, { color: colors.lightText }]}>
-            We deliver premium quality lamb and sheep directly from our farm to your doorstep. Each animal is carefully raised and prepared according to your preferences.
-          </Text>
-
-          <View style={styles.featuresContainer}>
-            <View style={[styles.featureRow, { backgroundColor: colors.card }]}>
-              <View style={[styles.featureIconContainer, { backgroundColor: colors.primary + '20' }]}>
-                <Ionicons name="paw" size={24} color={colors.primary} />
-              </View>
-              <View style={styles.featureTextContainer}>
-                <Text style={[styles.featureTitle, { color: colors.text }]}>Whole Animals</Text>
-                <Text style={[styles.featureDescription, { color: colors.lightText }]}>
-                  Choose from a variety of premium sheep and lamb
-                </Text>
-              </View>
-            </View>
-
-            <View style={[styles.featureRow, { backgroundColor: colors.card }]}>
-              <View style={[styles.featureIconContainer, { backgroundColor: colors.primary + '20' }]}>
-                <Ionicons name="cut" size={24} color={colors.primary} />
-              </View>
-              <View style={styles.featureTextContainer}>
-                <Text style={[styles.featureTitle, { color: colors.text }]}>Custom Cuts</Text>
-                <Text style={[styles.featureDescription, { color: colors.lightText }]}>
-                  Select your preferred cutting style and portions
-                </Text>
-              </View>
-            </View>
-
-            <View style={[styles.featureRow, { backgroundColor: colors.card }]}>
-              <View style={[styles.featureIconContainer, { backgroundColor: colors.primary + '20' }]}>
-                <Ionicons name="time" size={24} color={colors.primary} />
-              </View>
-              <View style={styles.featureTextContainer}>
-                <Text style={[styles.featureTitle, { color: colors.text }]}>Fast Delivery</Text>
-                <Text style={[styles.featureDescription, { color: colors.lightText }]}>
-                  Fresh meat delivered directly to your doorstep
-                </Text>
-              </View>
+      <View style={styles.mainContainer}>
+        <ScrollView 
+          style={styles.scrollView}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: Platform.OS === 'ios' ? 100 : 96 } // Add padding for FAB
+          ]}
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+        >
+          <View style={styles.heroSection}>
+            <Image 
+              source={require('../../assets/images/meat-banner.png')} 
+              style={styles.heroImage}
+              resizeMode="cover"
+            />
+            <LinearGradient
+              colors={['rgba(0,0,0,0.1)', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0.7)']}
+              style={styles.heroGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+            />
+            <View style={styles.heroContent}>
+              <Text style={[styles.heroTitle, createTextShadow('rgba(0, 0, 0, 0.5)', { width: 0, height: 2 }, 3)]}>
+                Mimi's Delivery
+              </Text>
+              <Text style={[styles.heroSubtitle, createTextShadow('rgba(0, 0, 0, 0.5)', { width: 0, height: 1 }, 2)]}>
+                Premium Lamb & Sheep Delivery
+              </Text>
             </View>
           </View>
 
-          <Button
-            title="Start Your Order"
-            onPress={handleStartOrder}
-            style={styles.button}
-          />
-        </View>
-      </ScrollView>
+          <View style={styles.contentContainer}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              Farm to Table. Directly to You.
+            </Text>
+            
+            <Text style={[styles.description, { color: colors.lightText }]}>
+              We deliver premium quality lamb and sheep directly from farm to your doorstep.
+            </Text>
+
+            <View style={styles.featuresContainer}>
+              <View style={[styles.featureRow, { backgroundColor: colors.card }]}>
+                <View style={[styles.featureIconContainer, { backgroundColor: colors.primary + '20' }]}>
+                  <Ionicons name="paw" size={24} color={colors.primary} />
+                </View>
+                <View style={styles.featureTextContainer}>
+                  <Text style={[styles.featureTitle, { color: colors.text }]}>Whole Animals</Text>
+                  <Text style={[styles.featureDescription, { color: colors.lightText }]}>
+                    Choose from a variety of premium sheep and lamb
+                  </Text>
+                </View>
+              </View>
+
+              <View style={[styles.featureRow, { backgroundColor: colors.card }]}>
+                <View style={[styles.featureIconContainer, { backgroundColor: colors.primary + '20' }]}>
+                  <Ionicons name="cut" size={24} color={colors.primary} />
+                </View>
+                <View style={styles.featureTextContainer}>
+                  <Text style={[styles.featureTitle, { color: colors.text }]}>Custom Cuts</Text>
+                  <Text style={[styles.featureDescription, { color: colors.lightText }]}>
+                    Select your preferred cutting style and portions
+                  </Text>
+                </View>
+              </View>
+
+              <View style={[styles.featureRow, { backgroundColor: colors.card }]}>
+                <View style={[styles.featureIconContainer, { backgroundColor: colors.primary + '20' }]}>
+                  <Ionicons name="time" size={24} color={colors.primary} />
+                </View>
+                <View style={styles.featureTextContainer}>
+                  <Text style={[styles.featureTitle, { color: colors.text }]}>Fast Delivery</Text>
+                  <Text style={[styles.featureDescription, { color: colors.lightText }]}>
+                    Fresh meat delivered directly to your doorstep
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        </ScrollView>
+
+        {/* Floating Action Button */}
+        <TouchableOpacity
+          style={[
+            styles.floatingButton,
+            { backgroundColor: colors.primary },
+            createShadow('0.3')
+          ]}
+          onPress={handleStartOrder}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="restaurant-outline" size={24} color="white" style={styles.buttonIcon} />
+          <Text style={styles.buttonText}>Start Your Order</Text>
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }
@@ -122,11 +138,14 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  scrollView: {
+    flex: 1,
+  },
   scrollContent: {
-    flexGrow: 1,
+    flexGrow: 0, // Prevent infinite scrolling
   },
   heroSection: {
-    height: height * 0.45,
+    height: height * 0.35,
     position: 'relative',
   },
   heroImage: {
@@ -204,5 +223,39 @@ const styles = StyleSheet.create({
   },
   button: {
     height: 56,
+  },
+  mainContainer: {
+    flex: 1,
+    position: 'relative',
+  },
+  floatingButton: {
+    position: 'absolute',
+    bottom: Platform.OS === 'ios' ? 20 : 16,
+    left: 16,
+    right: 16,
+    height: 56,
+    borderRadius: 28,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  buttonIcon: {
+    marginRight: 8,
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: '600',
   },
 });

@@ -15,7 +15,8 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "package": "com.tinsaemesfin.mimisdelivery"
     },
     "web": {
       "bundler": "metro",
@@ -31,12 +32,6 @@
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
-        }
-      ],
-      [
-        "@react-native-google-signin/google-signin",
-        {
-          "iosUrlScheme": "com.googleusercontent.apps.698788769052-5nac7kd4cabgtd1scmtg7fb0i28b5otg"
         }
       ]
     ],
