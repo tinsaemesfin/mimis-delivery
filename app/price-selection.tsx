@@ -1,199 +1,206 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  StyleSheet, 
-  View, 
-  Text, 
-  TouchableOpacity, 
-  ScrollView, 
+import {
+  StyleSheet,
   SafeAreaView,
-  ActivityIndicator
+  View,
+  Text,
+  FlatList,
+  TouchableOpacity,
+  Platform,
+  ActivityIndicator,
+  Dimensions
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { Ionicons } from '@expo/vector-icons';
+import Button from '../components/Button';
 import { Colors } from '../constants/Colors';
 import { useColorScheme } from '../hooks/useColorScheme';
-import Button from '../components/Button';
-import { Ionicons } from '@expo/vector-icons';
+import { createShadow } from '../utils/styling';
+import { supabase } from '../utils/supabase';
+
+const { width } = Dimensions.get('window');
 
 interface PriceOption {
   id: string;
-  animalId: string;
-  animalSize: string;
   name: string;
   price: number;
-  description: string;
-  isActive: boolean;
+  description: string | null;
 }
-
-// This would come from your API/database in a real app
-const fetchPriceOptions = async (animalId: string, size: string): Promise<PriceOption[]> => {
-  // Simulating API call delay
-  await new Promise(resolve => setTimeout(resolve, 1000));
-  
-  // For now, return mock data that matches the admin panel structure
-  return [
-    {
-      id: '1',
-      animalId: '1',
-      animalSize: 'Small',
-      name: 'Premium Package',
-      price: 320,
-      description: 'Premium cuts with extra care',
-      isActive: true
-    },
-    {
-      id: '2',
-      animalId: '1',
-      animalSize: 'Medium',
-      name: 'Family Package',
-      price: 480,
-      description: 'Perfect for family gatherings',
-      isActive: true
-    },
-    {
-      id: '3',
-      animalId: '2',
-      animalSize: 'Large',
-      name: 'Bulk Value',
-      price: 550,
-      description: 'Best value for larger orders',
-      isActive: true
-    }
-  ].filter(option => 
-    option.animalId === animalId && 
-    option.animalSize.toLowerCase() === size.toLowerCase() &&
-    option.isActive
-  );
-};
 
 export default function PriceSelectionScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { animalId, animalType, animalSize } = params;
-  
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme || 'light'];
-  
-  const [selectedPrice, setSelectedPrice] = useState<PriceOption | null>(null);
+
   const [priceOptions, setPriceOptions] = useState<PriceOption[]>([]);
+  const [selectedPrice, setSelectedPrice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch price options when component mounts
   useEffect(() => {
-    const loadPriceOptions = async () => {
-      try {
-        console.log('Loading price options with:', {
-          animalId,
-          animalSize,
-          params: JSON.stringify(params)
-        });
-        
-        const options = await fetchPriceOptions(animalId as string, animalSize as string);
-        console.log('Fetched price options:', options);
-        setPriceOptions(options);
-      } catch (error) {
-        console.error('Error loading price options:', error);
-      } finally {
-        setLoading(false);
+    fetchPriceOptions();
+  }, []);
+
+  const fetchPriceOptions = async () => {
+    try {
+      console.log('Fetching price options for animal size option:', params.sizeOptionId);
+      
+      const { data: priceData, error: priceError } = await supabase
+        .from('price_options')
+        .select('id, name, price, description')
+        .eq('animal_size_id', params.sizeOptionId)
+        .eq('is_active', true)
+        .order('price', { ascending: true });
+
+      if (priceError) {
+        console.error('Error fetching price options:', priceError);
+        setError('Failed to load price options');
+        return;
       }
-    };
-    
-    loadPriceOptions();
-  }, [animalId, animalSize]);
-  
-  const handleContinue = () => {
-    if (selectedPrice) {
-      router.push({
-        pathname: '/order-details',
-        params: {
-          ...params,
-          priceOptionId: selectedPrice.id,
-          priceOptionName: selectedPrice.name,
-          price: selectedPrice.price
-        }
-      });
+
+      if (!priceData || priceData.length === 0) {
+        console.log('No price options found');
+        setError('No price options available');
+        return;
+      }
+
+      console.log('Price options fetched successfully:', priceData);
+      setPriceOptions(priceData);
+    } catch (err) {
+      console.error('Unexpected error fetching price options:', err);
+      setError('An unexpected error occurred');
+    } finally {
+      setLoading(false);
     }
   };
-  
-  const formatCurrency = (amount: number) => {
-    return `$${amount.toFixed(2)}`;
+
+  const handlePriceSelect = (priceId: string) => {
+    console.log('Selected price option:', priceId);
+    setSelectedPrice(priceId);
   };
-  
+
+  const handleNextStep = () => {
+    if (!selectedPrice) {
+      alert('Please select a price option to continue');
+      return;
+    }
+
+    const selectedOption = priceOptions.find(option => option.id === selectedPrice);
+    
+    router.push({
+      pathname: '/cut-selection',
+      params: {
+        ...params, // Forward previous params
+        priceOptionId: selectedPrice,
+        price: selectedOption?.price.toString() || '',
+        priceName: selectedOption?.name || ''
+      }
+    });
+  };
+
+  const formatPrice = (price: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD'
+    }).format(price);
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.text }]}>
-            Loading price options...
-          </Text>
+          <Text style={[styles.loadingText, { color: colors.text }]}>Loading price options...</Text>
         </View>
       </SafeAreaView>
     );
   }
-  
+
+  if (error) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={styles.errorContainer}>
+          <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
+          <TouchableOpacity 
+            style={[styles.retryButton, { backgroundColor: colors.primary }]}
+            onPress={fetchPriceOptions}
+          >
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
       
       <View style={styles.header}>
-      
-        <Text style={[styles.subtitle, { color: colors.lightText }]}>
-          Choose your preferred pricing package for {animalType} ({animalSize})
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => router.back()}
+        >
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
+        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Select Price Option</Text>
+        <View style={styles.placeholder} />
+      </View>
+
+      <View style={styles.selectionInfo}>
+        <Text style={[styles.selectionText, { color: colors.text }]}>
+          Selected: {params.animalType} - {params.size}
         </Text>
       </View>
-      
-      <ScrollView 
-        style={styles.optionsContainer}
-        contentContainerStyle={styles.optionsContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {priceOptions.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={[styles.emptyText, { color: colors.lightText }]}>
-              No price options available for this selection.
+
+      <FlatList
+        data={priceOptions}
+        keyExtractor={item => item.id}
+        contentContainerStyle={styles.priceList}
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            style={[
+              styles.priceCard,
+              { backgroundColor: colors.card },
+              selectedPrice === item.id && styles.selectedPrice,
+              createShadow(colors.text, { width: 0, height: 2 }, 0.1, 3)
+            ]}
+            onPress={() => handlePriceSelect(item.id)}
+          >
+            <Text style={[
+              styles.priceName,
+              { color: colors.text },
+              selectedPrice === item.id && styles.selectedText
+            ]}>
+              {item.name}
             </Text>
-          </View>
-        ) : (
-          priceOptions.map((option) => (
-            <TouchableOpacity
-              key={option.id}
-              style={[
-                styles.optionCard,
-                selectedPrice?.id === option.id && styles.selectedOption,
-                { backgroundColor: colors.card, borderColor: selectedPrice?.id === option.id ? colors.primary : colors.border }
-              ]}
-              onPress={() => setSelectedPrice(option)}
-            >
-              <View style={styles.optionContent}>
-                <View style={styles.optionHeader}>
-                  <Text style={[styles.optionName, { color: colors.text }]}>
-                    {option.name}
-                  </Text>
-                  <Text style={[styles.optionPrice, { color: colors.primary }]}>
-                    {formatCurrency(option.price)}
-                  </Text>
-                </View>
-                
-                <Text style={[styles.optionDescription, { color: colors.lightText }]}>
-                  {option.description}
-                </Text>
-              </View>
-              
-              {selectedPrice?.id === option.id && (
-                <View style={[styles.checkmark, { backgroundColor: colors.primary }]}>
-                  <Ionicons name="checkmark" size={16} color="#FFFFFF" />
-                </View>
-              )}
-            </TouchableOpacity>
-          ))
+            <Text style={[
+              styles.priceAmount,
+              { color: colors.primary },
+              selectedPrice === item.id && styles.selectedText
+            ]}>
+              {formatPrice(item.price)}
+            </Text>
+            {item.description && (
+              <Text style={[
+                styles.priceDescription,
+                { color: colors.text },
+                selectedPrice === item.id && styles.selectedText
+              ]}>
+                {item.description}
+              </Text>
+            )}
+          </TouchableOpacity>
         )}
-      </ScrollView>
-      
-      <View style={styles.footer}>
+      />
+
+      <View style={[styles.footer, { backgroundColor: colors.background }]}>
         <Button
           title="Continue"
-          onPress={handleContinue}
+          onPress={handleNextStep}
           disabled={!selectedPrice}
           style={styles.continueButton}
         />
@@ -206,6 +213,73 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  header: {
+    height: 60,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(0,0,0,0.1)',
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  placeholder: {
+    width: 40,
+  },
+  selectionInfo: {
+    padding: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(0,0,0,0.1)',
+  },
+  selectionText: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  priceList: {
+    padding: 16,
+  },
+  priceCard: {
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  selectedPrice: {
+    backgroundColor: Colors.light.primary,
+  },
+  priceName: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  priceAmount: {
+    fontSize: 24,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  priceDescription: {
+    fontSize: 14,
+    opacity: 0.8,
+  },
+  selectedText: {
+    color: 'white',
+  },
+  footer: {
+    padding: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(0,0,0,0.1)',
+  },
+  continueButton: {
+    marginBottom: Platform.OS === 'ios' ? 16 : 0,
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -215,81 +289,25 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 16,
   },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 15,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    marginBottom: 10,
-  },
-  optionsContainer: {
+  errorContainer: {
     flex: 1,
-  },
-  optionsContent: {
-    padding: 16,
-  },
-  optionCard: {
-    borderRadius: 12,
-    borderWidth: 2,
-    padding: 16,
-    marginBottom: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  selectedOption: {
-    borderWidth: 2,
-  },
-  optionContent: {
-    flex: 1,
-  },
-  optionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  optionName: {
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  optionPrice: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  optionDescription: {
-    fontSize: 14,
-  },
-  checkmark: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 10,
-  },
-  footer: {
+    alignItems: 'center',
     padding: 20,
-    paddingBottom: 30,
   },
-  continueButton: {
-    paddingVertical: 14,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 32,
-  },
-  emptyText: {
+  errorText: {
     fontSize: 16,
     textAlign: 'center',
-    paddingHorizontal: 32,
-  }
+    marginBottom: 20,
+  },
+  retryButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '500',
+  },
 }); 

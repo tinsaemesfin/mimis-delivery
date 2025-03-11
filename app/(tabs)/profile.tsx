@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, 
   SafeAreaView, 
@@ -10,13 +10,16 @@ import {
   Platform,
   TextInput,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  Modal,
+  Pressable
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { useColorScheme } from '../../hooks/useColorScheme';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../lib/auth/AuthContext';
 import { useRouter } from 'expo-router';
+import { supabase } from '../../utils/supabase';
 
 // Validate email format
 const isValidEmail = (email: string) => {
@@ -51,37 +54,34 @@ export default function ProfileScreen() {
   const { user, signOut, signUpWithEmail } = useAuth();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   
-  // Registration form state
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('');
-  
-  // Form validation
-  const [emailError, setEmailError] = useState('');
-  const [passwordError, setPasswordError] = useState('');
+  // Edit form state
+  const [editFullName, setEditFullName] = useState('');
+  const [editPhoneNumber, setEditPhoneNumber] = useState('');
   const [fullNameError, setFullNameError] = useState('');
   const [phoneError, setPhoneError] = useState('');
-  const [confirmPasswordError, setConfirmPasswordError] = useState('');
 
-  const validateRegistrationForm = () => {
+  // Initialize edit form with user data when modal opens
+  useEffect(() => {
+    if (isEditModalVisible && user) {
+      setEditFullName(user.user_metadata?.full_name || '');
+      setEditPhoneNumber(user.user_metadata?.phone || '');
+    }
+  }, [isEditModalVisible, user]);
+
+  // Redirect to sign-in if not logged in
+  useEffect(() => {
+    if (!user) {
+      router.replace('/sign-in');
+    }
+  }, [user]);
+
+  const validateEditForm = () => {
     let isValid = true;
     
-    // Validate email
-    if (!email) {
-      setEmailError('Email is required');
-      isValid = false;
-    } else if (!isValidEmail(email)) {
-      setEmailError('Please enter a valid email address');
-      isValid = false;
-    } else {
-      setEmailError('');
-    }
-    
     // Validate full name
-    if (!fullName) {
+    if (!editFullName) {
       setFullNameError('Full name is required');
       isValid = false;
     } else {
@@ -89,81 +89,41 @@ export default function ProfileScreen() {
     }
     
     // Validate phone number
-    if (!phoneNumber) {
+    if (!editPhoneNumber) {
       setPhoneError('Phone number is required');
       isValid = false;
-    } else if (!isValidUSPhoneNumber(phoneNumber)) {
+    } else if (!isValidUSPhoneNumber(editPhoneNumber)) {
       setPhoneError('Please enter a valid US phone number');
       isValid = false;
     } else {
       setPhoneError('');
     }
     
-    // Validate password
-    if (!password) {
-      setPasswordError('Password is required');
-      isValid = false;
-    } else if (password.length < 6) {
-      setPasswordError('Password must be at least 6 characters');
-      isValid = false;
-    } else {
-      setPasswordError('');
-    }
-    
-    // Validate confirm password
-    if (!confirmPassword) {
-      setConfirmPasswordError('Please confirm your password');
-      isValid = false;
-    } else if (confirmPassword !== password) {
-      setConfirmPasswordError('Passwords do not match');
-      isValid = false;
-    } else {
-      setConfirmPasswordError('');
-    }
-    
     return isValid;
   };
 
-  const handleSignUp = async () => {
-    if (!validateRegistrationForm()) return;
+  const handleUpdateProfile = async () => {
+    if (!validateEditForm()) return;
     
     try {
       setIsLoading(true);
-      const result = await signUpWithEmail(email, password, fullName, phoneNumber);
       
-      // Check if email confirmation is required
-      if (result?.user && !result.user.confirmed_at) {
-        Alert.alert(
-          'Registration Successful', 
-          'Please check your email to confirm your account before signing in.',
-          [{ text: 'OK' }]
-        );
-      } else {
-        // If no email confirmation required or already confirmed
-        Alert.alert(
-          'Registration Successful', 
-          'Your account has been created successfully. You can now use all features.',
-          [{ text: 'OK' }]
-        );
-      }
-      
-      // Clear form
-      setEmail('');
-      setPassword('');
-      setConfirmPassword('');
-      setFullName('');
-      setPhoneNumber('');
+      const { error } = await supabase.auth.updateUser({
+        data: {
+          full_name: editFullName,
+          phone: editPhoneNumber,
+        }
+      });
+
+      if (error) throw error;
+
+      Alert.alert(
+        'Success',
+        'Your profile has been updated successfully.',
+        [{ text: 'OK', onPress: () => setIsEditModalVisible(false) }]
+      );
     } catch (error: any) {
-      // Handle specific error cases
-      if (error.message?.includes('User already registered')) {
-        Alert.alert(
-          'Registration Failed', 
-          'An account with this email already exists. Please sign in instead.',
-          [{ text: 'OK' }]
-        );
-      } else {
-        Alert.alert('Registration Failed', error.message || 'Please try again with different credentials.');
-      }
+      Alert.alert('Update Failed', error.message || 'Failed to update profile');
     } finally {
       setIsLoading(false);
     }
@@ -182,7 +142,7 @@ export default function ProfileScreen() {
   };
 
   const handlePhoneNumberChange = (text: string) => {
-    setPhoneNumber(formatPhoneNumber(text));
+    setEditPhoneNumber(formatPhoneNumber(text));
   };
 
   const renderMenuItem = (
@@ -209,7 +169,7 @@ export default function ProfileScreen() {
     </TouchableOpacity>
   );
 
-  if (isLoading) {
+  if (!user || isLoading) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
         <ActivityIndicator size="large" color={colors.primary} />
@@ -225,91 +185,103 @@ export default function ProfileScreen() {
         <View style={styles.header}>
           <Text style={[styles.title, { color: colors.text }]}>Profile</Text>
           <Text style={[styles.subtitle, { color: colors.lightText }]}>
-            {user ? 'Manage your account' : 'Create an account'}
+            Manage your account
           </Text>
         </View>
       </View>
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        {user ? (
-          // Logged-in User View
-          <>
-            <View style={[styles.profileCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <View style={[styles.profileIconContainer, { backgroundColor: colors.primary }]}>
-                <Text style={styles.profileIconText}>
-                  {user.user_metadata?.full_name ? user.user_metadata.full_name.charAt(0).toUpperCase() : user.email?.charAt(0).toUpperCase() || 'U'}
-                </Text>
-              </View>
-              <View style={styles.profileInfo}>
-                <Text style={[styles.profileName, { color: colors.text }]}>
-                  {user.user_metadata?.full_name || 'User'}
-                </Text>
-                <Text style={[styles.profileEmail, { color: colors.lightText }]}>
-                  {user.email}
-                </Text>
-                {user.user_metadata?.phone && (
-                  <Text style={[styles.profilePhone, { color: colors.lightText }]}>
-                    {user.user_metadata.phone}
-                  </Text>
-                )}
-              </View>
-            </View>
-
-            <View style={[styles.menuSection, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Account</Text>
-              
-              {renderMenuItem(
-                'person-outline',
-                'Personal Information',
-                'Update your personal details',
-                () => {}
-              )}
-              
-              {renderMenuItem(
-                'location-outline',
-                'Saved Addresses',
-                'Manage your delivery addresses',
-                () => {}
-              )}
-            </View>
-
-            <View style={[styles.menuSection, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Support</Text>
-              
-              {renderMenuItem(
-                'help-circle-outline',
-                'Help Center',
-                'Get help with your orders',
-                () => {}
-              )}
-              
-              {renderMenuItem(
-                'information-circle-outline',
-                'About Us',
-                'Learn more about Mimi\'s Delivery',
-                () => {}
-              )}
-            </View>
-
-            <TouchableOpacity
-              style={[styles.logoutButton, { backgroundColor: colors.error }]}
-              onPress={handleSignOut}
-            >
-              <Ionicons name="log-out-outline" size={20} color="white" style={styles.logoutIcon} />
-              <Text style={styles.logoutText}>Sign Out</Text>
-            </TouchableOpacity>
-          </>
-        ) : (
-          // Guest User View - Registration Form
-          <View style={styles.registrationContainer}>
-            <Text style={[styles.registrationTitle, { color: colors.text }]}>
-              Create an Account
+        <View style={[styles.profileCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.profileIconContainer, { backgroundColor: colors.primary }]}>
+            <Text style={styles.profileIconText}>
+              {user.user_metadata?.full_name ? user.user_metadata.full_name.charAt(0).toUpperCase() : user.email?.charAt(0).toUpperCase() || 'U'}
             </Text>
-            <Text style={[styles.registrationSubtitle, { color: colors.lightText }]}>
-              Sign up to track orders and save your preferences
+          </View>
+          <View style={styles.profileInfo}>
+            <Text style={[styles.profileName, { color: colors.text }]}>
+              {user.user_metadata?.full_name || 'User'}
             </Text>
+            <Text style={[styles.profileEmail, { color: colors.lightText }]}>
+              {user.email}
+            </Text>
+            {user.user_metadata?.phone && (
+              <Text style={[styles.profilePhone, { color: colors.lightText }]}>
+                {user.user_metadata.phone}
+              </Text>
+            )}
+          </View>
+        </View>
 
-            <View style={styles.formContainer}>
+        <View style={[styles.menuSection, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Account</Text>
+          
+          {renderMenuItem(
+            'person-outline',
+            'Personal Information',
+            'Update your personal details',
+            () => setIsEditModalVisible(true)
+          )}
+          
+          {renderMenuItem(
+            'location-outline',
+            'Saved Addresses',
+            'Manage your delivery addresses',
+            () => {}
+          )}
+        </View>
+
+        <View style={[styles.menuSection, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Support</Text>
+          
+          {renderMenuItem(
+            'help-circle-outline',
+            'Help Center',
+            'Get help with your orders',
+            () => {}
+          )}
+          
+          {renderMenuItem(
+            'information-circle-outline',
+            'About Us',
+            'Learn more about Mimi\'s Delivery',
+            () => {}
+          )}
+        </View>
+
+        <TouchableOpacity
+          style={[styles.logoutButton, { backgroundColor: colors.error }]}
+          onPress={handleSignOut}
+        >
+          <Ionicons name="log-out-outline" size={20} color="white" style={styles.logoutIcon} />
+          <Text style={styles.logoutText}>Sign Out</Text>
+        </TouchableOpacity>
+      </ScrollView>
+
+      {/* Edit Profile Modal */}
+      <Modal
+        visible={isEditModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsEditModalVisible(false)}
+      >
+        <Pressable 
+          style={styles.modalOverlay} 
+          onPress={() => setIsEditModalVisible(false)}
+        >
+          <Pressable 
+            style={[styles.modalContent, { backgroundColor: colors.background }]}
+            onPress={e => e.stopPropagation()}
+          >
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>
+                Edit Profile
+              </Text>
+              <TouchableOpacity onPress={() => setIsEditModalVisible(false)}>
+                <Ionicons name="close" size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalBody}>
               <View style={styles.inputGroup}>
                 <Text style={[styles.inputLabel, { color: colors.text }]}>Full Name</Text>
                 <TextInput
@@ -323,33 +295,16 @@ export default function ProfileScreen() {
                   ]}
                   placeholder="Enter your full name"
                   placeholderTextColor={colors.lightText}
-                  value={fullName}
-                  onChangeText={setFullName}
+                  value={editFullName}
+                  onChangeText={setEditFullName}
                 />
-                {fullNameError ? <Text style={[styles.errorText, { color: colors.error }]}>{fullNameError}</Text> : null}
+                {fullNameError ? (
+                  <Text style={[styles.errorText, { color: colors.error }]}>
+                    {fullNameError}
+                  </Text>
+                ) : null}
               </View>
-              
-              <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: colors.text }]}>Email</Text>
-                <TextInput
-                  style={[
-                    styles.input, 
-                    { 
-                      borderColor: emailError ? colors.error : colors.border,
-                      color: colors.text,
-                      backgroundColor: colors.card
-                    }
-                  ]}
-                  placeholder="Enter your email"
-                  placeholderTextColor={colors.lightText}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  value={email}
-                  onChangeText={setEmail}
-                />
-                {emailError ? <Text style={[styles.errorText, { color: colors.error }]}>{emailError}</Text> : null}
-              </View>
-              
+
               <View style={styles.inputGroup}>
                 <Text style={[styles.inputLabel, { color: colors.text }]}>Phone Number</Text>
                 <TextInput
@@ -364,72 +319,29 @@ export default function ProfileScreen() {
                   placeholder="(123) 456-7890"
                   placeholderTextColor={colors.lightText}
                   keyboardType="phone-pad"
-                  value={phoneNumber}
-                  onChangeText={handlePhoneNumberChange}
-                  maxLength={14} // (XXX) XXX-XXXX
+                  value={editPhoneNumber}
+                  onChangeText={(text) => setEditPhoneNumber(formatPhoneNumber(text))}
+                  maxLength={14}
                 />
-                {phoneError ? <Text style={[styles.errorText, { color: colors.error }]}>{phoneError}</Text> : null}
+                {phoneError ? (
+                  <Text style={[styles.errorText, { color: colors.error }]}>
+                    {phoneError}
+                  </Text>
+                ) : null}
               </View>
-              
-              <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: colors.text }]}>Password</Text>
-                <TextInput
-                  style={[
-                    styles.input, 
-                    { 
-                      borderColor: passwordError ? colors.error : colors.border,
-                      color: colors.text,
-                      backgroundColor: colors.card
-                    }
-                  ]}
-                  placeholder="Create a password"
-                  placeholderTextColor={colors.lightText}
-                  secureTextEntry
-                  value={password}
-                  onChangeText={setPassword}
-                />
-                {passwordError ? <Text style={[styles.errorText, { color: colors.error }]}>{passwordError}</Text> : null}
-              </View>
-              
-              <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: colors.text }]}>Confirm Password</Text>
-                <TextInput
-                  style={[
-                    styles.input, 
-                    { 
-                      borderColor: confirmPasswordError ? colors.error : colors.border,
-                      color: colors.text,
-                      backgroundColor: colors.card
-                    }
-                  ]}
-                  placeholder="Confirm your password"
-                  placeholderTextColor={colors.lightText}
-                  secureTextEntry
-                  value={confirmPassword}
-                  onChangeText={setConfirmPassword}
-                />
-                {confirmPasswordError ? <Text style={[styles.errorText, { color: colors.error }]}>{confirmPasswordError}</Text> : null}
-              </View>
-              
+
               <TouchableOpacity
-                style={[styles.registerButton, { backgroundColor: colors.primary }]}
-                onPress={handleSignUp}
+                style={[styles.updateButton, { backgroundColor: colors.primary }]}
+                onPress={handleUpdateProfile}
               >
-                <Text style={styles.registerButtonText}>Create Account</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={styles.signInLink}
-                onPress={() => router.push('/sign-in')}
-              >
-                <Text style={[styles.signInLinkText, { color: colors.primary }]}>
-                  Already have an account? Sign In
+                <Text style={styles.updateButtonText}>
+                  Update Profile
                 </Text>
               </TouchableOpacity>
             </View>
-          </View>
-        )}
-      </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -619,5 +531,45 @@ const styles = StyleSheet.create({
   },
   signInLinkText: {
     fontSize: 14,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 20,
+    paddingBottom: 40,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingBottom: 15,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(0,0,0,0.1)',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  modalBody: {
+    padding: 20,
+  },
+  updateButton: {
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  updateButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
   },
 }); 

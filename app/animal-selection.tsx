@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, 
   SafeAreaView, 
@@ -10,7 +10,8 @@ import {
   StatusBar as RNStatusBar,
   Dimensions,
   ScrollView,
-  Platform
+  Platform,
+  ActivityIndicator
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
@@ -20,101 +21,235 @@ import Card from '../components/Card';
 import { Colors } from '../constants/Colors';
 import { useColorScheme } from '../hooks/useColorScheme';
 import { createShadow } from '../utils/styling';
+import { supabase } from '../utils/supabase';
 
 const { width } = Dimensions.get('window');
 
-// Mock data for animals
-const animals = [
-  {
-    id: '1',
-    title: 'Lamb',
-    description: 'Young sheep, tender meat with a mild flavor.',
-    image: require('../assets/images/meat-banner.png'),
-    sizes: ['Small', 'Medium', 'Large']
-  },
-  {
-    id: '2',
-    title: 'Sheep',
-    description: 'Adult sheep with richer flavor and firmer texture.',
-    image: require('../assets/images/meat-banner.png'),
-    sizes: ['Medium', 'Large']
-  }
-];
+// Types for our data structure
+interface Animal {
+  id: string;
+  title: string;
+  description: string;
+  image_url: string;
+  sizes?: Size[]; // Make sizes optional since we're not fetching them directly
+}
+
+interface Size {
+  id: string;
+  name: string;
+  description: string;
+}
+
+interface AnimalSizeOption {
+  id: string;
+  animal_id: string;
+  size_id: string;
+  description: string;
+  size: Size;
+}
 
 export default function AnimalSelectionScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme || 'light'];
   
+  const [animals, setAnimals] = useState<Animal[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedAnimal, setSelectedAnimal] = useState<string | null>(null);
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
+  const [animalSizeOptions, setAnimalSizeOptions] = useState<AnimalSizeOption[]>([]);
+  
+  // Fetch animals and their available sizes
+  useEffect(() => {
+    fetchAnimals();
+  }, []);
+
+  // Fetch size options when an animal is selected
+  useEffect(() => {
+    if (selectedAnimal) {
+      fetchAnimalSizeOptions(selectedAnimal);
+    }
+  }, [selectedAnimal]);
+
+  const fetchAnimals = async () => {
+    try {
+      console.log('Starting to fetch animals from Supabase...');
+      
+      // Log that we're making the query
+      console.log('Querying animals table with is_active = true');
+      
+      const { data: animalsData, error: animalsError } = await supabase
+        .from('animals')
+        .select('id, title, description, image_url')
+        .eq('is_active', true);
+
+      console.log('Raw response:', { animalsData, animalsError });
+
+      if (animalsError) {
+        console.error('Error fetching animals:', animalsError);
+        setError('Failed to load animals');
+        return;
+      }
+
+      if (!animalsData || animalsData.length === 0) {
+        console.log('No animals found in the database');
+        setError('No animals available');
+        return;
+      }
+
+      console.log('Animals fetched successfully:', animalsData);
+      
+      const transformedData: Animal[] = (animalsData || []).map(animal => ({
+        id: animal.id,
+        title: animal.title,
+        description: animal.description,
+        image_url: animal.image_url
+      }));
+      
+      console.log('Transformed data:', transformedData);
+      setAnimals(transformedData);
+    } catch (err) {
+      console.error('Unexpected error fetching animals:', err);
+      setError('An unexpected error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchAnimalSizeOptions = async (animalId: string) => {
+    try {
+      console.log('Fetching size options for animal:', animalId);
+      const { data: sizeOptionsData, error: sizeOptionsError } = await supabase
+        .from('animal_size_options')
+        .select(`
+          id,
+          animal_id,
+          size_id,
+          description,
+          sizes (
+            id,
+            name,
+            description
+          )
+        `)
+        .eq('animal_id', animalId)
+        .eq('is_active', true)
+        .returns<Array<{
+          id: string;
+          animal_id: string;
+          size_id: string;
+          description: string;
+          sizes: Size;
+        }>>();
+
+      if (sizeOptionsError) {
+        console.error('Error fetching size options:', sizeOptionsError);
+        setError('Failed to load size options');
+        return;
+      }
+
+      console.log('Size options fetched successfully:', sizeOptionsData);
+      
+      // Transform the data to match our TypeScript interface
+      const transformedData: AnimalSizeOption[] = (sizeOptionsData || []).map(option => ({
+        id: option.id,
+        animal_id: option.animal_id,
+        size_id: option.size_id,
+        description: option.description,
+        size: option.sizes // Rename sizes to size in the transformation
+      }));
+      
+      setAnimalSizeOptions(transformedData);
+    } catch (err) {
+      console.error('Unexpected error fetching size options:', err);
+      setError('An unexpected error occurred');
+    }
+  };
   
   const handleAnimalSelect = (animalId: string) => {
+    console.log('Selected animal:', animalId);
     setSelectedAnimal(animalId);
     setSelectedSize(null); // Reset size selection when animal changes
   };
   
-  const handleSizeSelect = (size: string) => {
-    setSelectedSize(size);
+  const handleSizeSelect = (sizeId: string) => {
+    console.log('Selected size:', sizeId);
+    setSelectedSize(sizeId);
   };
   
   const handleNextStep = () => {
     if (selectedAnimal && selectedSize) {
       const animal = animals.find(a => a.id === selectedAnimal);
+      const sizeOption = animalSizeOptions.find(option => option.size.id === selectedSize);
+      
+      console.log('Proceeding to next step with:', {
+        animalId: selectedAnimal,
+        animalType: animal?.title,
+        sizeOptionId: sizeOption?.id,
+        size: sizeOption?.size.name
+      });
+
       router.push({
         pathname: '/price-selection',
         params: {
           animalId: selectedAnimal,
           animalType: animal?.title || '',
-          animalSize: selectedSize
+          sizeOptionId: sizeOption?.id || '',
+          size: sizeOption?.size.name || ''
         }
       });
     } else {
-      // Show an error message if animal or size is not selected
+      console.warn('Cannot proceed: animal or size not selected');
       alert('Please select an animal and size to continue');
     }
   };
   
   const getAvailableSizes = () => {
-    if (!selectedAnimal) return [];
-    const animal = animals.find(a => a.id === selectedAnimal);
-    return animal ? animal.sizes : [];
+    if (!selectedAnimal || !animalSizeOptions.length) return [];
+    return animalSizeOptions.map(option => option.size);
   };
   
-  const renderAnimalItem = ({ item }: { item: typeof animals[0] }) => (
+  const renderAnimalItem = ({ item }: { item: Animal }) => (
     <Card
       title={item.title}
       description={item.description}
-      image={item.image}
+      image={item.image_url ? { uri: item.image_url } : require('../assets/images/meat-banner.png')}
       selected={selectedAnimal === item.id}
       onPress={() => handleAnimalSelect(item.id)}
     />
   );
-  
-  const renderSizeItem = ({ item }: { item: string }) => (
-    <TouchableOpacity
-      style={[
-        styles.sizeCard,
-        { backgroundColor: colors.card },
-        selectedSize === item && styles.selectedSize,
-        createShadow(colors.text, { width: 0, height: 2 }, 0.1, 3)
-      ]}
-      onPress={() => handleSizeSelect(item)}
-    >
-      <Text style={[
-        styles.sizeText,
-        { color: colors.text },
-        selectedSize === item && styles.selectedSizeText
-      ]}>
-        {item}
-      </Text>
-    </TouchableOpacity>
-  );
-  
+
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.text }]}>Loading animals...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={styles.errorContainer}>
+          <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
+          <TouchableOpacity 
+            style={[styles.retryButton, { backgroundColor: colors.primary }]}
+            onPress={fetchAnimals}
+          >
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
-   
       
       <ScrollView
         style={styles.scrollView}
@@ -138,21 +273,21 @@ export default function AnimalSelectionScreen() {
             <View style={styles.sizesContainer}>
               {getAvailableSizes().map((size) => (
                 <TouchableOpacity
-                  key={size}
+                  key={size.id}
                   style={[
                     styles.sizeCard,
                     { backgroundColor: colors.card },
-                    selectedSize === size && styles.selectedSize,
+                    selectedSize === size.id && styles.selectedSize,
                     createShadow(colors.text, { width: 0, height: 2 }, 0.1, 3)
                   ]}
-                  onPress={() => handleSizeSelect(size)}
+                  onPress={() => handleSizeSelect(size.id)}
                 >
                   <Text style={[
                     styles.sizeText,
                     { color: colors.text },
-                    selectedSize === size && styles.selectedSizeText
+                    selectedSize === size.id && styles.selectedSizeText
                   ]}>
-                    {size}
+                    {size.name}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -282,5 +417,35 @@ const styles = StyleSheet.create({
   },
   continueButton: {
     marginBottom: Platform.OS === 'ios' ? 16 : 0,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  errorText: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  retryButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '500',
   },
 }); 

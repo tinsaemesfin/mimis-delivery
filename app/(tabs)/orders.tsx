@@ -8,7 +8,11 @@ import {
   TouchableOpacity,
   Modal,
   Platform,
-  Pressable
+  Pressable,
+  TextInput,
+  ActivityIndicator,
+  Alert,
+  ScrollView
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Colors } from '../../constants/Colors';
@@ -16,73 +20,207 @@ import { useColorScheme } from '../../hooks/useColorScheme';
 import { Ionicons } from '@expo/vector-icons';
 import { createShadow } from '../../utils/styling';
 import Button from '../../components/Button';
-import { ScrollView } from 'react-native-gesture-handler';
+import { supabase } from '../../utils/supabase';
+import { User } from '@supabase/supabase-js';
 
-// Example data for orders
-const orderHistory = [
-  {
-    id: '1',
-    date: '2023-10-15',
-    status: 'Delivered',
-    items: 'Lamb - Medium - Standard Cut',
-  },
-  {
-    id: '2',
-    date: '2023-10-01',
-    status: 'Delivered',
-    items: 'Sheep - Large - Premium Cut',
-  },
-  {
-    id: '3',
-    date: '2023-09-20',
-    status: 'Cancelled',
-    items: 'Goat - Medium - Standard Cut',
-  },
-  {
-    id: '4',
-    date: '2023-11-05',
-    status: 'Processing',
-    items: 'Lamb - Small - Custom Cut',
-  },
-];
+interface Order {
+  id: string;
+  order_ticket: string;
+  created_at: string;
+  status: string;
+  customer_name: string;
+  total: number;
+  animal_size_id: string;
+  price_option_id: string;
+  cutting_style_id: string;
+  delivery_date_id: string;
+  address: string;
+  phone_number: string;
+  guest_email?: string;
+  guest_phone?: string;
+  payment_status: string;
+  divided: boolean;
+  special_instructions?: string;
+  animal_size?: {
+    id: string;
+    animal: {
+      title: string;
+      description: string;
+    };
+    size: {
+      name: string;
+      description: string;
+    };
+  };
+  price_option?: {
+    name: string;
+    price: number;
+  };
+  cutting_style?: {
+    title: string;
+    description: string;
+  };
+  delivery_date?: {
+    date: string;
+    available_slots: number;
+  };
+}
 
 export default function OrdersScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme || 'light'];
+  const [user, setUser] = useState<User | null>(null);
   
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [ticketNumber, setTicketNumber] = useState('');
   const [dateFilterVisible, setDateFilterVisible] = useState(false);
   const [startDate, setStartDate] = useState<string | null>(null);
   const [endDate, setEndDate] = useState<string | null>(null);
-  const [filteredOrders, setFilteredOrders] = useState(orderHistory);
+  const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
   const [tempStartDate, setTempStartDate] = useState<string | null>(null);
   const [tempEndDate, setTempEndDate] = useState<string | null>(null);
   
-  // Filter orders when date filter changes
+  // Check auth state
   useEffect(() => {
-    if (startDate || endDate) {
-      const filtered = orderHistory.filter(order => {
-        const orderDate = new Date(order.date);
-        let includeOrder = true;
-        
-        if (startDate) {
-          const start = new Date(startDate);
-          includeOrder = includeOrder && orderDate >= start;
-        }
-        
-        if (endDate) {
-          const end = new Date(endDate);
-          end.setHours(23, 59, 59, 999); // Include the entire end day
-          includeOrder = includeOrder && orderDate <= end;
-        }
-        
-        return includeOrder;
-      });
-      
-      setFilteredOrders(filtered);
-    } else {
-      setFilteredOrders(orderHistory);
+    checkUser();
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      setUser(session?.user ?? null);
+    });
+    return () => {
+      authListener?.subscription?.unsubscribe();
+    };
+  }, []);
+
+  const checkUser = async () => {
+    try {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      setUser(currentUser);
+    } catch (error) {
+      console.error('Error checking user:', error);
     }
-  }, [startDate, endDate]);
+  };
+
+  // Fetch orders when user changes
+  useEffect(() => {
+    if (user) {
+      fetchUserOrders();
+    }
+  }, [user]);
+
+  const fetchUserOrders = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const { data, error: fetchError } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          animal_size:animal_size_options!animal_size_id (
+            id,
+            animal:animals!animal_id (
+              title,
+              description
+            ),
+            size:sizes!size_id (
+              name,
+              description
+            )
+          ),
+          price_option:price_options!price_option_id (
+            name,
+            price
+          ),
+          cutting_style:cutting_styles!cutting_style_id (
+            title,
+            description
+          ),
+          delivery_date:delivery_dates!delivery_date_id (
+            date,
+            available_slots
+          )
+        `)
+        .eq('user_id', user?.id)
+        .order('created_at', { ascending: false });
+
+      if (fetchError) {
+        throw fetchError;
+      }
+
+      setOrders(data || []);
+      setFilteredOrders(data || []);
+    } catch (err) {
+      console.error('Error fetching orders:', err);
+      setError('Failed to load orders');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const lookupOrderByTicket = async () => {
+    if (!ticketNumber.trim()) {
+      Alert.alert('Error', 'Please enter a ticket number');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      const { data, error: fetchError } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          animal_size:animal_size_options!animal_size_id (
+            id,
+            animal:animals!animal_id (
+              title,
+              description
+            ),
+            size:sizes!size_id (
+              name,
+              description
+            )
+          ),
+          price_option:price_options!price_option_id (
+            name,
+            price
+          ),
+          cutting_style:cutting_styles!cutting_style_id (
+            title,
+            description
+          ),
+          delivery_date:delivery_dates!delivery_date_id (
+            date,
+            available_slots
+          )
+        `)
+        .eq('order_ticket', ticketNumber.toUpperCase())
+        .single();
+
+      if (fetchError) {
+        throw fetchError;
+      }
+
+      if (data) {
+        setOrders([data]);
+        setFilteredOrders([data]);
+      } else {
+        setError('No order found with this ticket number');
+        setOrders([]);
+        setFilteredOrders([]);
+      }
+    } catch (err) {
+      console.error('Error looking up order:', err);
+      setError('Failed to find order');
+      setOrders([]);
+      setFilteredOrders([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const formatDateForDisplay = (dateString: string | null) => {
     if (!dateString) return 'Any';
@@ -310,75 +448,189 @@ export default function OrdersScreen() {
     );
   };
 
-  const renderOrderItem = ({ item }: { item: typeof orderHistory[0] }) => (
-    <View style={[
-      styles.orderCard, 
-      { backgroundColor: colors.card, borderColor: colors.border },
-      createShadow(colors.text, { width: 0, height: 2 }, 0.1, 3)
-    ]}>
+  const renderOrderDetails = (order: Order) => (
+    <View style={[styles.orderDetailsCard, { backgroundColor: colors.card }]}>
       <View style={styles.orderHeader}>
-        <Text style={[styles.orderDate, { color: colors.text }]}>
-          Order placed: {new Date(item.date).toLocaleDateString()}
-        </Text>
+        <View>
+          <Text style={[styles.orderTicket, { color: colors.primary }]}>
+            #{order.order_ticket}
+          </Text>
+          <Text style={[styles.orderDate, { color: colors.text }]}>
+            {new Date(order.created_at).toLocaleString()}
+          </Text>
+        </View>
         <View style={[
           styles.statusBadge, 
           { 
             backgroundColor: 
-              item.status === 'Delivered' ? '#E1F5E1' : 
-              item.status === 'Processing' ? '#FFF9C4' : '#FFEBEE' 
+              order.status === 'delivered' ? '#E1F5E1' : 
+              order.status === 'processing' ? '#FFF9C4' : '#FFEBEE' 
           }
         ]}>
           <Text style={[
             styles.statusText, 
             { 
               color: 
-                item.status === 'Delivered' ? '#2E7D32' : 
-                item.status === 'Processing' ? '#F57F17' : '#C62828' 
+                order.status === 'delivered' ? '#2E7D32' : 
+                order.status === 'processing' ? '#F57F17' : '#C62828' 
             }
           ]}>
-            {item.status}
+            {order.status.toUpperCase()}
           </Text>
         </View>
       </View>
-      
-      <View style={styles.orderContent}>
-        <Ionicons 
-          name={
-            item.status === 'Delivered' ? 'checkmark-circle' : 
-            item.status === 'Processing' ? 'time' : 'close-circle'
-          } 
-          size={28} 
-          color={
-            item.status === 'Delivered' ? '#4CAF50' : 
-            item.status === 'Processing' ? '#FF9800' : '#F44336'
-          } 
-          style={styles.statusIcon}
-        />
-        <View style={styles.orderDetails}>
-          <Text style={[styles.orderItems, { color: colors.text }]}>{item.items}</Text>
+
+      <View style={styles.orderSection}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Customer Details</Text>
+        <View style={styles.detailRow}>
+          <Text style={[styles.detailLabel, { color: colors.lightText }]}>Name:</Text>
+          <Text style={[styles.detailValue, { color: colors.text }]}>{order.customer_name}</Text>
         </View>
-      </View>
-      
-      {/* Action buttons based on status */}
-      <View style={styles.actionContainer}>
-        {item.status === 'Delivered' && (
-          <TouchableOpacity 
-            style={[styles.actionButton, { backgroundColor: colors.primary + '10' }]}
-            onPress={() => {/* Handle reorder */}}
-          >
-            <Ionicons name="repeat" size={16} color={colors.primary} style={styles.actionIcon} />
-            <Text style={[styles.actionText, { color: colors.primary }]}>Reorder</Text>
-          </TouchableOpacity>
+        <View style={styles.detailRow}>
+          <Text style={[styles.detailLabel, { color: colors.lightText }]}>Phone:</Text>
+          <Text style={[styles.detailValue, { color: colors.text }]}>{order.phone_number}</Text>
+        </View>
+        <View style={styles.detailRow}>
+          <Text style={[styles.detailLabel, { color: colors.lightText }]}>Address:</Text>
+          <Text style={[styles.detailValue, { color: colors.text }]}>{order.address}</Text>
+        </View>
+        {order.guest_email && (
+          <View style={styles.detailRow}>
+            <Text style={[styles.detailLabel, { color: colors.lightText }]}>Email:</Text>
+            <Text style={[styles.detailValue, { color: colors.text }]}>{order.guest_email}</Text>
+          </View>
         )}
-        
-        <TouchableOpacity 
-          style={[styles.actionButton, { backgroundColor: colors.card }]}
-          onPress={() => {/* Handle order details */}}
-        >
-          <Ionicons name="list" size={16} color={colors.text} style={styles.actionIcon} />
-          <Text style={[styles.actionText, { color: colors.text }]}>Details</Text>
-        </TouchableOpacity>
       </View>
+
+      <View style={styles.orderSection}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Animal Details</Text>
+        {order.animal_size && (
+          <>
+            <View style={styles.detailRow}>
+              <Text style={[styles.detailLabel, { color: colors.lightText }]}>Animal Type:</Text>
+              <Text style={[styles.detailValue, { color: colors.text }]}>
+                {order.animal_size.animal.title}
+              </Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={[styles.detailLabel, { color: colors.lightText }]}>Size:</Text>
+              <Text style={[styles.detailValue, { color: colors.text }]}>
+                {order.animal_size.size.name}
+              </Text>
+            </View>
+          </>
+        )}
+        {order.cutting_style && (
+          <View style={styles.detailRow}>
+            <Text style={[styles.detailLabel, { color: colors.lightText }]}>Cutting Style:</Text>
+            <Text style={[styles.detailValue, { color: colors.text }]}>
+              {order.cutting_style.title}
+            </Text>
+          </View>
+        )}
+        {order.price_option && (
+          <View style={styles.detailRow}>
+            <Text style={[styles.detailLabel, { color: colors.lightText }]}>Package:</Text>
+            <Text style={[styles.detailValue, { color: colors.text }]}>
+              {order.price_option.name}
+            </Text>
+          </View>
+        )}
+      </View>
+
+      <View style={styles.orderSection}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Delivery Details</Text>
+        {order.delivery_date && (
+          <>
+            <View style={styles.detailRow}>
+              <Text style={[styles.detailLabel, { color: colors.lightText }]}>Date:</Text>
+              <Text style={[styles.detailValue, { color: colors.text }]}>
+                {new Date(order.delivery_date.date).toLocaleDateString()}
+              </Text>
+            </View>
+          </>
+        )}
+        <View style={styles.detailRow}>
+          <Text style={[styles.detailLabel, { color: colors.lightText }]}>Total:</Text>
+          <Text style={[styles.detailValue, { color: colors.primary, fontWeight: '600' }]}>
+            ${order.total.toFixed(2)}
+          </Text>
+        </View>
+        <View style={styles.detailRow}>
+          <Text style={[styles.detailLabel, { color: colors.lightText }]}>Payment Status:</Text>
+          <Text style={[styles.detailValue, { color: colors.text }]}>
+            {order.payment_status.toUpperCase()}
+          </Text>
+        </View>
+        {order.special_instructions && (
+          <View style={styles.detailRow}>
+            <Text style={[styles.detailLabel, { color: colors.lightText }]}>Special Instructions:</Text>
+            <Text style={[styles.detailValue, { color: colors.text }]}>{order.special_instructions}</Text>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+
+  const renderGuestView = () => (
+    <View style={styles.guestContainer}>
+      {!orders.length ? (
+        <View style={styles.guestContent}>
+          <View style={styles.guestHeader}>
+            <Ionicons name="ticket-outline" size={64} color={colors.primary} />
+            <Text style={[styles.guestTitle, { color: colors.text }]}>
+              Track Your Order
+            </Text>
+            <Text style={[styles.guestSubtitle, { color: colors.lightText }]}>
+              Enter your order ticket number to view your order details
+            </Text>
+          </View>
+          
+          <View style={styles.ticketInputContainer}>
+            <TextInput
+              style={[styles.ticketInput, { 
+                backgroundColor: colors.card,
+                color: colors.text,
+                borderColor: error ? colors.error : colors.border
+              }]}
+              placeholder="Enter Ticket Number (e.g., ABC123)"
+              placeholderTextColor={colors.lightText}
+              value={ticketNumber}
+              onChangeText={(text) => {
+                setTicketNumber(text.toUpperCase());
+                setError(null);
+              }}
+              autoCapitalize="characters"
+              maxLength={6}
+            />
+            <Button
+              title="Look Up Order"
+              onPress={lookupOrderByTicket}
+              style={styles.lookupButton}
+              disabled={!ticketNumber.trim() || ticketNumber.trim().length < 6}
+            />
+          </View>
+
+          {error && (
+            <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
+          )}
+        </View>
+      ) : (
+        <View style={styles.orderDetailsContainer}>
+          <ScrollView contentContainerStyle={styles.orderDetailsContent}>
+            {renderOrderDetails(orders[0])}
+            <Button
+              title="Look Up Another Order"
+              onPress={() => {
+                setOrders([]);
+                setTicketNumber('');
+                setError(null);
+              }}
+              style={styles.lookupAnotherButton}
+            />
+          </ScrollView>
+        </View>
+      )}
     </View>
   );
 
@@ -388,73 +640,61 @@ export default function OrdersScreen() {
       
       <View style={styles.headerContainer}>
         <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.text }]}>Your Orders</Text>
+          <Text style={[styles.title, { color: colors.text }]}>
+            {user ? 'Your Orders' : 'Track Order'}
+          </Text>
           <Text style={[styles.subtitle, { color: colors.lightText }]}>
-            View your order history
+            {user ? 'View your order history' : 'Look up your order details'}
           </Text>
         </View>
       </View>
 
-      {/* Date filter button */}
-      <View style={styles.filterContainer}>
-        <TouchableOpacity 
-          style={[
-            styles.dateFilterButton, 
-            { 
-              backgroundColor: colors.card,
-              borderColor: (startDate || endDate) ? colors.primary : colors.border
-            },
-            createShadow(colors.text, { width: 0, height: 1 }, 0.05, 2)
-          ]}
-          onPress={openDateFilter}
-        >
-          <Ionicons name="calendar-outline" size={20} color={colors.primary} style={styles.filterIcon} />
-          <View style={styles.dateRangeTextContainer}>
-            <Text style={[styles.dateRangeLabel, { color: colors.lightText }]}>Date Range:</Text>
-            <Text style={[styles.dateRangeValue, { color: colors.text }]}>
-              {startDate || endDate ? 
-                `${formatDateForDisplay(startDate)} - ${formatDateForDisplay(endDate)}` : 
-                'All Orders'}
-            </Text>
-          </View>
-          <Ionicons name="chevron-down" size={20} color={colors.lightText} />
-        </TouchableOpacity>
-        
-        {(startDate || endDate) && (
-          <TouchableOpacity 
-            style={styles.clearFilterButton} 
-            onPress={clearDateFilter}
-          >
-            <Text style={[styles.clearFilterText, { color: colors.primary }]}>Clear</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {filteredOrders.length > 0 ? (
-        <FlatList
-          data={filteredOrders}
-          renderItem={renderOrderItem}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-        />
-      ) : (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="receipt-outline" size={56} color={colors.lightText} />
-          <Text style={[styles.emptyText, { color: colors.lightText }]}>
-            {startDate || endDate ? 'No orders found for this date range' : 'You don\'t have any orders yet'}
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.text }]}>
+            {user ? 'Loading orders...' : 'Looking up order...'}
           </Text>
-          {(startDate || endDate) && (
+        </View>
+      ) : user ? (
+        <React.Fragment>
+          <View style={styles.filterContainer}>
             <TouchableOpacity 
-              style={[styles.clearFilterButton, { marginTop: 16 }]}
-              onPress={clearDateFilter}
+              style={[
+                styles.dateFilterButton, 
+                { 
+                  backgroundColor: colors.card,
+                  borderColor: (startDate || endDate) ? colors.primary : colors.border
+                }
+              ]}
+              onPress={() => setDateFilterVisible(true)}
             >
-              <Text style={[styles.clearFilterText, { color: colors.primary }]}>
-                Clear filter
+              <Ionicons name="calendar-outline" size={20} color={colors.primary} />
+              <Text style={[styles.filterText, { color: colors.text }]}>
+                {startDate || endDate ? 
+                  `${formatDateForDisplay(startDate)} - ${formatDateForDisplay(endDate)}` : 
+                  'All Orders'}
               </Text>
             </TouchableOpacity>
+          </View>
+          {filteredOrders.length > 0 ? (
+            <FlatList
+              data={filteredOrders}
+              renderItem={({ item }) => renderOrderDetails(item)}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={styles.listContent}
+            />
+          ) : (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="receipt-outline" size={56} color={colors.lightText} />
+              <Text style={[styles.emptyText, { color: colors.lightText }]}>
+                No orders found
+              </Text>
+            </View>
           )}
-        </View>
+        </React.Fragment>
+      ) : (
+        renderGuestView()
       )}
 
       {/* Date Range Picker Modal */}
@@ -688,5 +928,124 @@ const styles = StyleSheet.create({
   datePickerButton: {
     flex: 1,
     marginHorizontal: 4,
+  },
+  guestContainer: {
+    flex: 1,
+    width: '100%',
+  },
+  guestContent: {
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 40,
+  },
+  guestHeader: {
+    alignItems: 'center',
+    marginBottom: 40,
+    width: '100%',
+    maxWidth: 400,
+  },
+  guestTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    marginTop: 24,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  guestSubtitle: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 0,
+    lineHeight: 24,
+  },
+  ticketInputContainer: {
+    width: '100%',
+    maxWidth: 400,
+    marginBottom: 20,
+  },
+  ticketInput: {
+    height: 56,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 20,
+    fontSize: 16,
+    marginBottom: 16,
+    textAlign: 'left',
+    letterSpacing: 1,
+  },
+  lookupButton: {
+    width: '100%',
+    height: 56,
+    borderRadius: 12,
+  },
+  errorText: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 12,
+    maxWidth: 400,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+  },
+  filterText: {
+    fontSize: 14,
+    marginLeft: 8,
+    flex: 1,
+  },
+  orderDetailsCard: {
+    borderRadius: 12,
+    padding: 16,
+    margin: 16,
+    ...createShadow('#000', { width: 0, height: 2 }, 0.1, 3),
+  },
+  orderTicket: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  orderSection: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(0,0,0,0.1)',
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  detailLabel: {
+    fontSize: 14,
+    flex: 1,
+  },
+  detailValue: {
+    fontSize: 14,
+    flex: 2,
+    textAlign: 'right',
+  },
+  orderDetailsContainer: {
+    flex: 1,
+    width: '100%',
+  },
+  orderDetailsContent: {
+    padding: 16,
+    paddingBottom: 32,
+  },
+  lookupAnotherButton: {
+    margin: 16,
+    marginTop: 0,
+    height: 56,
+    borderRadius: 12,
   },
 }); 

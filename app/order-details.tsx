@@ -11,7 +11,9 @@ import {
   Keyboard,
   TouchableWithoutFeedback,
   FlatList,
-  Alert
+  Alert,
+  ActivityIndicator,
+  TextInput
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -21,282 +23,506 @@ import { Colors } from '../constants/Colors';
 import { useColorScheme } from '../hooks/useColorScheme';
 import { Ionicons } from '@expo/vector-icons';
 import { createShadow } from '../utils/styling';
+import { supabase } from '../utils/supabase';
+import { useAuth } from '../lib/auth/AuthContext';
 
 // Mock data for cutting styles - in the real app, this would come from your database
-const cuttingStyles = [
-  { id: '1', name: 'Standard', description: 'Basic cuts including legs, shoulders, and chops' },
-  { id: '2', name: 'Ethiopian', description: 'Specialized cuts with more detail and precision' },
-  { id: '3', name: 'Mexican', description: 'Tell us exactly how you want your meat prepared' },
-];
 
-// Mock data for delivery dates - in the real app, this would come from your database
-const availableDeliveryDates = [
-  { id: '1', date: 'July 15, 2023', available: true },
-  { id: '2', date: 'July 16, 2023', available: true },
-  { id: '3', date: 'July 17, 2023', available: true },
-  { id: '4', date: 'July 18, 2023', available: false },
-  { id: '5', date: 'July 19, 2023', available: true },
-];
+
+interface DeliveryDate {
+  id: string;
+  date: string;
+  available_slots: number;
+}
+
+interface OrderDetails {
+  customerName: string;
+  phoneNumber: string;
+  zipCode: string;
+  address: string;
+  email: string;
+  isValidZip: boolean;
+}
+
+interface Profile {
+  email?: string;
+  phone?: string;
+  full_name?: string;
+}
+
+const formatPhoneNumber = (phoneNumber: string) => {
+  // Remove all non-numeric characters
+  const cleaned = phoneNumber.replace(/\D/g, '');
+  
+  // Format as (XXX) XXX-XXXX
+  if (cleaned.length >= 10) {
+    return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6, 10)}`;
+  }
+  return cleaned;
+};
+
+const isValidUSPhone = (phone: string) => {
+  const phoneRegex = /^\(\d{3}\) \d{3}-\d{4}$/;
+  return phoneRegex.test(phone);
+};
+
+// DC Coordinates (approximate center)
+const DC_CENTER = {
+  lat: 38.8977,
+  lng: -77.0365
+};
+
+const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+  const R = 3959; // Radius of the Earth in miles
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c; // Distance in miles
+};
+
+const generateOrderTicket = () => {
+  // Generate a 6-character ticket with 3 letters and 3 numbers
+  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const numbers = '0123456789';
+  let ticket = '';
+  
+  // Add 3 random letters
+  for (let i = 0; i < 3; i++) {
+    ticket += letters.charAt(Math.floor(Math.random() * letters.length));
+  }
+  
+  // Add 3 random numbers
+  for (let i = 0; i < 3; i++) {
+    ticket += numbers.charAt(Math.floor(Math.random() * numbers.length));
+  }
+  
+  return ticket;
+};
 
 export default function OrderDetailsScreen() {
-  const { animalType, animalSize } = useLocalSearchParams();
   const router = useRouter();
+  const params = useLocalSearchParams();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme || 'light'];
+  const { user } = useAuth();
+  const [profile, setProfile] = useState<Profile | null>(null);
 
-  const [cuttingStyle, setCuttingStyle] = useState('');
-  const [divided, setDivided] = useState(false);
-  const [deliveryDate, setDeliveryDate] = useState('');
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [address, setAddress] = useState('');
-  
-  // Define the Record type explicitly
-  const [errors, setErrors] = useState<{
-    cuttingStyle?: string;
-    deliveryDate?: string;
-    name?: string;
-    phone?: string;
-    address?: string;
-  }>({});
+  // Fetch user profile when component mounts
+  useEffect(() => {
+    if (user) {
+      fetchUserProfile();
+    }
+  }, [user]);
 
-  const validateForm = () => {
-    const newErrors: {
-      cuttingStyle?: string;
-      deliveryDate?: string;
-      name?: string;
-      phone?: string;
-      address?: string;
-    } = {};
+  const fetchUserProfile = async () => {
+    if (!user?.id) return;
     
-    if (!cuttingStyle) newErrors.cuttingStyle = 'Please select a cutting style';
-    if (!deliveryDate) newErrors.deliveryDate = 'Please select a delivery date';
-    if (!name.trim()) newErrors.name = 'Name is required';
-    if (!phone.trim()) newErrors.phone = 'Phone number is required';
-    if (!address.trim()) newErrors.address = 'Address is required';
-    
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
+    try {
+      const { data: { user: userData }, error } = await supabase.auth.getUser();
 
-  const handleSubmit = () => {
-    if (validateForm()) {
-      router.navigate({
-        pathname: '/order-confirmation',
-        params: {
-          animalType,
-          animalSize,
-          cuttingStyle,
-          divided: divided ? 'Yes' : 'No',
-          deliveryDate,
-          name,
-          phone,
-          address
-        }
-      });
-    } else {
-      Alert.alert('Please fill in all required fields');
+      if (error) {
+        console.error('Error fetching user:', error);
+        return;
+      }
+
+      if (userData) {
+        console.log('USers Data',userData)
+        setProfile({
+          full_name: userData.user_metadata?.full_name,
+          phone: userData.user_metadata?.phone,
+          email: userData.email,
+        });
+        setOrderDetails(prev => ({
+          ...prev,
+          customerName: userData.user_metadata?.full_name || '',
+          phoneNumber: userData.user_metadata?.phone_number || '',
+          email: userData.email || '',
+        }));
+      } else {
+        console.log('No user data found');
+        setProfile(null);
+      }
+    } catch (err) {
+      console.error('Unexpected error fetching user:', err);
     }
   };
 
-  const renderCuttingStyleItem = ({ item }: { item: typeof cuttingStyles[0] }) => (
-    <TouchableOpacity
-      style={[
-        styles.styleOption,
-        { 
-          backgroundColor: cuttingStyle === item.name ? colors.primary + '20' : colors.card,
-          borderColor: cuttingStyle === item.name ? colors.primary : colors.border 
-        },
-        createShadow(colors.text, { width: 0, height: 1 }, 0.05, 2)
-      ]}
-      onPress={() => setCuttingStyle(item.name)}
-    >
-      <View style={styles.styleContent}>
-        {cuttingStyle === item.name && (
-          <Ionicons name="checkmark-circle" size={20} color={colors.primary} style={styles.checkIcon} />
-        )}
-        <Text style={[styles.styleName, { color: colors.text }]}>{item.name}</Text>
-      </View>
-    </TouchableOpacity>
-  );
+  const [deliveryDates, setDeliveryDates] = useState<DeliveryDate[]>([]);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [orderDetails, setOrderDetails] = useState<OrderDetails>({
+    customerName: '',
+    phoneNumber: '',
+    zipCode: '',
+    address: '',
+    email: user?.email || '',
+    isValidZip: false
+  });
 
-  const renderDeliveryDateItem = ({ item }: { item: typeof availableDeliveryDates[0] }) => (
-    <TouchableOpacity
-      style={[
-        styles.dateOption,
-        { 
-          backgroundColor: deliveryDate === item.date ? colors.primary + '20' : colors.card,
-          borderColor: deliveryDate === item.date ? colors.primary : colors.border,
-          opacity: item.available ? 1 : 0.5,
-          ...(item.available ? {} : { opacity: 0.5 })
-        },
-        createShadow(colors.text, { width: 0, height: 1 }, 0.05, 2)
-      ]}
-      onPress={() => item.available && setDeliveryDate(item.date)}
-      disabled={!item.available}
-    >
-      <View style={styles.dateContent}>
-        {deliveryDate === item.date && (
-          <Ionicons name="checkmark-circle" size={20} color={colors.primary} style={styles.checkIcon} />
-        )}
-        <Text style={[styles.dateName, { color: colors.text }]}>{item.date}</Text>
-        {!item.available && (
-          <Text style={styles.unavailableText}>Unavailable</Text>
-        )}
-      </View>
-    </TouchableOpacity>
-  );
+  // Update order details when profile is loaded
+  useEffect(() => {
+    if (profile) {
+      setOrderDetails(prev => ({
+        ...prev,
+        customerName: profile.full_name || prev.customerName,
+        phoneNumber: profile.phone || prev.phoneNumber,
+        email: profile.email || prev.email,
+      }));
+    }
+  }, [profile]);
+
+  // Fetch delivery dates when component mounts
+  useEffect(() => {
+    fetchDeliveryDates();
+  }, []);
+
+  const fetchDeliveryDates = async () => {
+    try {
+      console.log('Fetching delivery dates...');
+      
+      const { data: datesData, error: datesError } = await supabase
+        .from('delivery_dates')
+        .select('id, date, available_slots')
+        .eq('is_active', true)
+        .gt('available_slots', 0)
+        .gt('date', new Date().toISOString())
+        .order('date');
+
+      if (datesError) {
+        console.error('Error fetching delivery dates:', datesError);
+        setError('Failed to load delivery dates');
+        return;
+      }
+
+      if (!datesData || datesData.length === 0) {
+        console.log('No delivery dates found');
+        setError('No delivery dates available');
+        return;
+      }
+
+      console.log('Delivery dates fetched successfully:', datesData);
+      setDeliveryDates(datesData);
+    } catch (err) {
+      console.error('Unexpected error fetching delivery dates:', err);
+      setError('An unexpected error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDateSelect = (dateId: string) => {
+    console.log('Selected delivery date:', dateId);
+    setSelectedDate(dateId);
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  };
+
+  const validateZipCode = async (zipCode: string) => {
+    try {
+      // Using the free Zippopotam.us API to get ZIP code coordinates
+      const response = await fetch(`https://api.zippopotam.us/us/${zipCode}`);
+      const data = await response.json();
+      
+      if (data && data.places && data.places[0]) {
+        const lat = parseFloat(data.places[0].latitude);
+        const lng = parseFloat(data.places[0].longitude);
+        
+        const distance = calculateDistance(DC_CENTER.lat, DC_CENTER.lng, lat, lng);
+        
+        if (distance <= 70) {
+          setOrderDetails(prev => ({ ...prev, isValidZip: true }));
+          return true;
+        } else {
+          Alert.alert(
+            "Invalid ZIP Code",
+            `This ZIP code is ${Math.round(distance)} miles from DC, which is outside our 70-mile delivery radius.`
+          );
+          setOrderDetails(prev => ({ ...prev, isValidZip: false }));
+          return false;
+        }
+      }
+      Alert.alert("Invalid ZIP Code", "Please enter a valid US ZIP code.");
+      setOrderDetails(prev => ({ ...prev, isValidZip: false }));
+      return false;
+    } catch (error) {
+      console.error('Error validating ZIP code:', error);
+      Alert.alert("Error", "Unable to validate ZIP code. Please try again.");
+      setOrderDetails(prev => ({ ...prev, isValidZip: false }));
+      return false;
+    }
+  };
+
+  const handlePhoneChange = (text: string) => {
+    const formattedPhone = formatPhoneNumber(text);
+    setOrderDetails(prev => ({ ...prev, phoneNumber: formattedPhone }));
+  };
+
+  const handleNextStep = async () => {
+    if (!selectedDate) {
+      Alert.alert('Error', 'Please select a delivery date');
+      return;
+    }
+
+    if (!orderDetails.zipCode.trim()) {
+      Alert.alert('Error', 'Please enter your ZIP code');
+      return;
+    }
+
+    if (!orderDetails.address.trim()) {
+      Alert.alert('Error', 'Please enter your street address');
+      return;
+    }
+
+    if (!isValidUSPhone(orderDetails.phoneNumber)) {
+      Alert.alert('Error', 'Please enter a valid US phone number');
+      return;
+    }
+
+    if (!orderDetails.isValidZip) {
+      const isValid = await validateZipCode(orderDetails.zipCode);
+      if (!isValid) return;
+    }
+
+    if (!user && (!orderDetails.customerName.trim() || !orderDetails.email.trim())) {
+      Alert.alert('Error', 'Please fill in all required fields');
+      return;
+    }
+
+    try {
+      // Generate a unique order ticket
+      const orderTicket = generateOrderTicket();
+      
+      // Create the order in the database
+      const { data: orderData, error: orderError } = await supabase
+        .from('orders')
+        .insert({
+          user_id: user?.id || null,
+          guest_email: !user ? orderDetails.email : null,
+          guest_phone: !user ? orderDetails.phoneNumber : null,
+          customer_name: orderDetails.customerName,
+          phone_number: orderDetails.phoneNumber,
+          address: `${orderDetails.address}, ${orderDetails.zipCode}`,
+          animal_size_id: params.sizeOptionId,
+          price_option_id: params.priceOptionId,
+          cutting_style_id: params.cuttingStyleId,
+          total: parseFloat(params.price as string),
+          delivery_date_id: selectedDate,
+          order_ticket: orderTicket,
+          status: 'pending',
+          payment_status: 'unpaid' // Since it's cash on delivery
+        })
+        .select()
+        .single();
+
+      if (orderError) {
+        console.error('Error creating order:', orderError);
+        Alert.alert('Error', 'Failed to create order. Please try again.');
+        return;
+      }
+
+      // Navigate to confirmation screen
+      router.push({
+        pathname: '/order-confirmation' as const,
+        params: {
+          orderId: orderData.id,
+          orderTicket: orderTicket,
+          isGuest: !user ? 'true' : 'false',
+          ...params,
+          deliveryDateId: selectedDate,
+          customerName: orderDetails.customerName,
+          phoneNumber: orderDetails.phoneNumber,
+          address: `${orderDetails.address}, ${orderDetails.zipCode}`,
+          email: orderDetails.email,
+        }
+      });
+    } catch (error) {
+      console.error('Error processing order:', error);
+      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+    }
+  };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.text }]}>Loading delivery dates...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
       
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === "ios" || 'android' ? "padding" : "height"}
-          style={{ flex: 1 }}
-          keyboardVerticalOffset={Platform.OS === "ios" || "android" ? 64 : 0}
+      <View style={styles.header}>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => router.back()}
         >
-         
-          <ScrollView 
-            style={styles.scrollView} 
-            contentContainerStyle={[styles.scrollContent, { paddingBottom: 120 }]}
-            showsVerticalScrollIndicator={false}
-          >
-            <View style={[styles.orderSummary, { backgroundColor: colorScheme === 'dark' ? colors.card : 'rgba(0,0,0,0.03)' }]}>
-              <Text style={[styles.summaryTitle, { color: colors.text }]}>Order Summary</Text>
-              <View style={styles.summaryRow}>
-                <Text style={[styles.summaryLabel, { color: colors.lightText }]}>Animal:</Text>
-                <Text style={[styles.summaryValue, { color: colors.text }]}>{animalType as string}</Text>
-              </View>
-              <View style={styles.summaryRow}>
-                <Text style={[styles.summaryLabel, { color: colors.lightText }]}>Size:</Text>
-                <Text style={[styles.summaryValue, { color: colors.text }]}>{animalSize as string}</Text>
-              </View>
-            </View>
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
+        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Order Details</Text>
+        <View style={styles.placeholder} />
+      </View>
 
-            <View style={styles.sectionContainer}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Cutting Style</Text>
-              <Text style={[styles.sectionDescription, { color: colors.lightText }]}>Select how you would like your meat to be cut</Text>
-              <FlatList
-                data={cuttingStyles}
-                renderItem={renderCuttingStyleItem}
-                keyExtractor={(item) => item.id}
-                horizontal={false}
-                scrollEnabled={false}
-              />
+      <ScrollView style={styles.scrollView}>
+        {/* Order Summary Section */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Order Summary</Text>
+          <View style={[styles.summaryCard, { backgroundColor: colors.card }]}>
+            <View style={styles.summaryRow}>
+              <Text style={[styles.summaryLabel, { color: colors.lightText }]}>Animal Type:</Text>
+              <Text style={[styles.summaryValue, { color: colors.text }]}>{params.animalType}</Text>
             </View>
-
-            <View style={styles.sectionContainer}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Divide Animal?</Text>
-              <Text style={[styles.sectionDescription, { color: colors.lightText }]}>
-                Would you like to divide the animal in two parts?
+            <View style={styles.summaryRow}>
+              <Text style={[styles.summaryLabel, { color: colors.lightText }]}>Size:</Text>
+              <Text style={[styles.summaryValue, { color: colors.text }]}>{params.size}</Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={[styles.summaryLabel, { color: colors.lightText }]}>Price Option:</Text>
+              <Text style={[styles.summaryValue, { color: colors.text }]}>{params.priceName}</Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={[styles.summaryLabel, { color: colors.lightText }]}>Price:</Text>
+              <Text style={[styles.summaryValue, { color: colors.primary, fontWeight: '600' }]}>
+                ${params.price}
               </Text>
-              
-              <View style={styles.divideOptions}>
-                <TouchableOpacity
-                  style={[
-                    styles.divideOption,
-                    { 
-                      backgroundColor: !divided ? colors.primary : 'transparent',
-                      borderColor: colors.primary
-                    },
-                    createShadow(colors.text, { width: 0, height: 1 }, 0.05, 2)
-                  ]}
-                  onPress={() => setDivided(false)}
-                >
-                  <Text 
-                    style={[
-                      styles.divideOptionText, 
-                      { color: !divided ? 'white' : colors.primary }
-                    ]}
-                  >
-                    No, Keep Whole
-                  </Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity
-                  style={[
-                    styles.divideOption,
-                    { 
-                      backgroundColor: divided ? colors.primary : 'transparent',
-                      borderColor: colors.primary
-                    },
-                    createShadow(colors.text, { width: 0, height: 1 }, 0.05, 2)
-                  ]}
-                  onPress={() => setDivided(true)}
-                >
-                  <Text 
-                    style={[
-                      styles.divideOptionText, 
-                      { color: divided ? 'white' : colors.primary }
-                    ]}
-                  >
-                    Yes, Divide in Two
-                  </Text>
-                </TouchableOpacity>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={[styles.summaryLabel, { color: colors.lightText }]}>Cutting Style:</Text>
+              <Text style={[styles.summaryValue, { color: colors.text }]}>{params.cuttingStyleName}</Text>
+            </View>
+            {params.selectedOrgans && (
+              <View style={styles.summaryRow}>
+                <Text style={[styles.summaryLabel, { color: colors.lightText }]}>Selected Organs:</Text>
+                <Text style={[styles.summaryValue, { color: colors.text }]}>{params.selectedOrgans}</Text>
               </View>
-            </View>
-
-            <View style={styles.sectionContainer}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Delivery Date</Text>
-              <Text style={[styles.sectionDescription, { color: colors.lightText }]}>Select your preferred delivery date</Text>
-              <FlatList
-                data={availableDeliveryDates}
-                renderItem={renderDeliveryDateItem}
-                keyExtractor={(item) => item.id}
-                horizontal={false}
-                scrollEnabled={false}
-              />
-            </View>
-
-            <View style={styles.form}>
-              <Input
-                label="Your Name"
-                placeholder="Enter your full name"
-                value={name}
-                onChangeText={setName}
-                error={errors.name}
-                icon={<Ionicons name="person-outline" size={20} color={colors.primary} />}
-              />
-              
-              <Input
-                label="Phone Number"
-                placeholder="Enter your phone number"
-                keyboardType="phone-pad"
-                value={phone}
-                onChangeText={setPhone}
-                error={errors.phone}
-                icon={<Ionicons name="call-outline" size={20} color={colors.primary} />}
-              />
-              
-              <Input
-                label="Delivery Address"
-                placeholder="Enter your complete address"
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-                style={styles.addressInput}
-                value={address}
-                onChangeText={setAddress}
-                error={errors.address}
-                icon={<Ionicons name="location-outline" size={20} color={colors.primary} />}
-              />
-            </View>
-          </ScrollView>
-
-          <View style={[styles.footer, { 
-            borderTopColor: colors.border,
-            backgroundColor: colorScheme === 'dark' ? 'rgba(25,25,25,0.95)' : 'rgba(255,255,255,0.95)'
-          }]}>
-            <Button
-              title="Complete Order"
-              onPress={handleSubmit}
-              style={styles.button}
-            />
+            )}
           </View>
-        </KeyboardAvoidingView>
-      </TouchableWithoutFeedback>
+        </View>
+
+        {/* Delivery Date Section */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Select Delivery Date</Text>
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.datesContainer}
+          >
+            {deliveryDates.map((date) => (
+              <TouchableOpacity
+                key={date.id}
+                style={[
+                  styles.dateCard,
+                  { backgroundColor: colors.card },
+                  selectedDate === date.id && styles.selectedDate,
+                  createShadow(colors.text, { width: 0, height: 2 }, 0.1, 3)
+                ]}
+                onPress={() => handleDateSelect(date.id)}
+              >
+                <Text style={[
+                  styles.dateText,
+                  { color: colors.text },
+                  selectedDate === date.id && styles.selectedText
+                ]}>
+                  {formatDate(date.date)}
+                </Text>
+                <Text style={[
+                  styles.slotsText,
+                  { color: colors.lightText },
+                  selectedDate === date.id && styles.selectedText
+                ]}>
+                  {date.available_slots} slots available
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+
+        {/* Customer Details Section */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Delivery Details</Text>
+          
+          {/* Always show name and phone fields for both logged-in and guest users */}
+          <TextInput
+            style={[styles.input, { backgroundColor: colors.card, color: colors.text }]}
+            placeholder="Full Name"
+            placeholderTextColor={colors.lightText}
+            value={orderDetails.customerName}
+            onChangeText={(text) => setOrderDetails(prev => ({ ...prev, customerName: text }))}
+          />
+          <TextInput
+            style={[styles.input, { backgroundColor: colors.card, color: colors.text }]}
+            placeholder="Phone Number (XXX) XXX-XXXX"
+            placeholderTextColor={colors.lightText}
+            value={orderDetails.phoneNumber}
+            onChangeText={handlePhoneChange}
+            keyboardType="phone-pad"
+            maxLength={14}
+          />
+          
+          {/* Only show email field for guest users */}
+          {!user && (
+            <TextInput
+              style={[styles.input, { backgroundColor: colors.card, color: colors.text }]}
+              placeholder="Email"
+              placeholderTextColor={colors.lightText}
+              value={orderDetails.email}
+              onChangeText={(text) => setOrderDetails(prev => ({ ...prev, email: text }))}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+          )}
+          
+          <TextInput
+            style={[styles.input, { backgroundColor: colors.card, color: colors.text }]}
+            placeholder="ZIP Code (Must be within 70 miles of DC)"
+            placeholderTextColor={colors.lightText}
+            value={orderDetails.zipCode}
+            onChangeText={(text) => {
+              const cleaned = text.replace(/\D/g, '').slice(0, 5);
+              setOrderDetails(prev => ({ ...prev, zipCode: cleaned, isValidZip: false }));
+              if (cleaned.length === 5) {
+                validateZipCode(cleaned);
+              }
+            }}
+            keyboardType="numeric"
+            maxLength={5}
+          />
+          
+          <TextInput
+            style={[styles.input, { backgroundColor: colors.card, color: colors.text }]}
+            placeholder="Street Address"
+            placeholderTextColor={colors.lightText}
+            value={orderDetails.address}
+            onChangeText={(text) => setOrderDetails(prev => ({ ...prev, address: text }))}
+            multiline
+          />
+        </View>
+      </ScrollView>
+
+      <View style={[styles.footer, { backgroundColor: colors.background }]}>
+        <Button
+          title="Confirm Order"
+          onPress={handleNextStep}
+          disabled={!selectedDate || !orderDetails.address || !orderDetails.isValidZip}
+          style={styles.continueButton}
+        />
+      </View>
     </SafeAreaView>
   );
 }
@@ -305,149 +531,14 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  headerContainer: {
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.05)',
-  },
   header: {
-    paddingVertical: 10,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    lineHeight: 24,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 20,
-  },
-  orderSummary: {
-    marginBottom: 24,
-    padding: 16,
-    borderRadius: 12,
-  },
-  summaryTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 12,
-  },
-  summaryRow: {
+    height: 60,
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  summaryLabel: {
-    fontSize: 16,
-  },
-  summaryValue: {
-    fontSize: 16,
-    fontWeight: '500',
-    textTransform: 'capitalize',
-  },
-  sectionContainer: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 12,
-  },
-  sectionDescription: {
-    fontSize: 14,
-    marginBottom: 12,
-  },
-  styleOption: {
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 16,
-    marginBottom: 10,
-  },
-  styleContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  styleName: {
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  dateOption: {
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 16,
-    marginBottom: 10,
-  },
-  dateContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  dateName: {
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  unavailableText: {
-    fontSize: 14,
-    color: '#F44336',
-    marginLeft: 'auto',
-  },
-  checkIcon: {
-    marginRight: 8,
-  },
-  divideOptions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 10,
-  },
-  divideOption: {
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 12,
-    flex: 1,
-    marginHorizontal: 5,
-    alignItems: 'center',
-  },
-  divideOptionText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  form: {
-    marginTop: 10,
-    marginBottom: 24,
-  },
-  addressInput: {
-    height: 120,
-    paddingTop: 16,
-  },
-  footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 20,
-    borderTopWidth: 1,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -3 },
-        shadowOpacity: 0.1,
-        shadowRadius: 5,
-      },
-      android: {
-        elevation: 10,
-      },
-    }),
-  },
-  button: {
-    width: '100%',
-    height: 56,
+    paddingHorizontal: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(0,0,0,0.1)',
   },
   backButton: {
     width: 40,
@@ -455,8 +546,90 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  rightPlaceholder: {
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  placeholder: {
     width: 40,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  section: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    marginHorizontal: 16,
+    marginBottom: 12,
+  },
+  summaryCard: {
+    marginHorizontal: 16,
+    padding: 16,
+    borderRadius: 12,
+    ...createShadow('#000', { width: 0, height: 2 }, 0.1, 3),
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  summaryLabel: {
+    fontSize: 16,
+  },
+  summaryValue: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  datesContainer: {
+    paddingHorizontal: 16,
+  },
+  dateCard: {
+    padding: 16,
+    borderRadius: 12,
+    marginRight: 12,
+    minWidth: 200,
+  },
+  selectedDate: {
+    backgroundColor: Colors.light.primary,
+  },
+  dateText: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  slotsText: {
+    fontSize: 14,
+  },
+  selectedText: {
+    color: 'white',
+  },
+  input: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    padding: 12,
+    borderRadius: 8,
+    fontSize: 16,
+    minHeight: 48,
+  },
+  footer: {
+    padding: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(0,0,0,0.1)',
+  },
+  continueButton: {
+    marginBottom: Platform.OS === 'ios' ? 16 : 0,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
   },
 }); 
 

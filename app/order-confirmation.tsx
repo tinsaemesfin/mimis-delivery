@@ -5,143 +5,173 @@ import {
   View, 
   Text, 
   ScrollView,
-  Dimensions,
-  Platform 
+  Platform,
+  Share,
+  TouchableOpacity,
+  Alert,
+  ViewStyle
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import Button from '../components/Button';
 import { Colors } from '../constants/Colors';
 import { useColorScheme } from '../hooks/useColorScheme';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { createShadow, createTextShadow } from '../utils/styling';
-
-const { width, height } = Dimensions.get('window');
+import { createShadow } from '../utils/styling';
 
 export default function OrderConfirmationScreen() {
-  const params = useLocalSearchParams();
   const router = useRouter();
+  const params = useLocalSearchParams();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme || 'light'];
 
-  const { 
-    animalType, 
-    animalSize, 
-    cuttingStyle, 
-    divided,
-    deliveryDate,
-    name, 
-    phone, 
-    address 
-  } = params;
+  const handleShare = async () => {
+    try {
+      const message = `
+Order Details:
+Order Ticket: ${params.orderTicket}
+Name: ${params.customerName}
+Phone: ${params.phoneNumber}
+Address: ${params.address}
+Animal: ${params.animalType} (${params.size})
+Price Option: ${params.priceName}
+Total: $${params.price}
+Cutting Style: ${params.cuttingStyleName}
+${params.selectedOrgans ? `Selected Organs: ${params.selectedOrgans}` : ''}
 
-  const handleBackToHome = () => {
-    router.push('/');
+Please keep this information for your records.
+      `;
+
+      await Share.share({
+        message,
+        title: `Order Ticket: ${params.orderTicket}`,
+      });
+    } catch (error) {
+      console.error('Error sharing order details:', error);
+    }
   };
 
-  const formatDate = (dateString: string) => {
-    return dateString;
+  const handleDone = () => {
+    if (params.isGuest === 'true') {
+      Alert.alert(
+        "Save Your Order Details",
+        "Please take a screenshot or share your order details for future reference. You can track your order using your order ticket number.",
+        [
+          {
+            text: "Share Details",
+            onPress: handleShare,
+          },
+          {
+            text: "Done",
+            onPress: () => router.push('/'),
+            style: "default"
+          }
+        ]
+      );
+    } else {
+      router.push('/');
+    }
+  };
+
+  const shareButtonStyle: ViewStyle = {
+    ...styles.shareButton,
+    backgroundColor: colors.card
   };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar style="light" />
+      <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
       
-      <ScrollView 
-        style={styles.scrollView} 
-        contentContainerStyle={[styles.scrollContent]}
-        showsVerticalScrollIndicator={false}
-      >
-        <LinearGradient
-          colors={['#e63946', '#9d0208']}
-          style={styles.header}
-        >
-          <View style={styles.successIcon}>
-            <Ionicons name="checkmark-circle" size={80} color="white" />
+      <ScrollView style={styles.scrollView}>
+        <View style={styles.content}>
+          <View style={[styles.successIcon, { backgroundColor: colors.primary }]}>
+            <Ionicons name="checkmark" size={48} color="white" />
           </View>
-          <Text style={[styles.headerTitle, createTextShadow('rgba(0, 0, 0, 0.3)', { width: 0, height: 1 }, 3)]}>Thank You!</Text>
-          <Text style={styles.headerSubtitle}>Your order has been placed successfully</Text>
-        </LinearGradient>
+          
+          <Text style={[styles.title, { color: colors.text }]}>Order Confirmed!</Text>
+          
+          <View style={[styles.ticketContainer, { backgroundColor: colors.card }]}>
+            <Text style={[styles.ticketLabel, { color: colors.lightText }]}>Order Ticket</Text>
+            <Text style={[styles.ticketNumber, { color: colors.primary }]}>{params.orderTicket}</Text>
+            <Text style={[styles.ticketInfo, { color: colors.lightText }]}>
+              Use this ticket number to track your order
+            </Text>
+          </View>
 
-        <View style={styles.contentContainer}>
-          <View style={[styles.card, { backgroundColor: colors.card }, createShadow(colors.text, { width: 0, height: 2 }, 0.1, 3)]}>
-            <View style={styles.cardHeader}>
-              <Ionicons name="calendar-outline" size={24} color={colors.primary} />
-              <Text style={[styles.cardTitle, { color: colors.text }]}>Delivery Information</Text>
+          <View style={[styles.detailsCard, { backgroundColor: colors.card }]}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Order Details</Text>
+            
+            <View style={styles.detailRow}>
+              <Text style={[styles.detailLabel, { color: colors.lightText }]}>Name:</Text>
+              <Text style={[styles.detailValue, { color: colors.text }]}>{params.customerName}</Text>
             </View>
             
-            <View style={styles.cardContent}>
-              <Text style={[styles.deliveryLabel, { color: colors.lightText }]}>Estimated Delivery:</Text>
-              <Text style={[styles.deliveryDate, { color: colors.text }]}>
-                {formatDate(deliveryDate as string)}
+            <View style={styles.detailRow}>
+              <Text style={[styles.detailLabel, { color: colors.lightText }]}>Phone:</Text>
+              <Text style={[styles.detailValue, { color: colors.text }]}>{params.phoneNumber}</Text>
+            </View>
+            
+            <View style={styles.detailRow}>
+              <Text style={[styles.detailLabel, { color: colors.lightText }]}>Address:</Text>
+              <Text style={[styles.detailValue, { color: colors.text }]}>{params.address}</Text>
+            </View>
+            
+            <View style={styles.detailRow}>
+              <Text style={[styles.detailLabel, { color: colors.lightText }]}>Animal:</Text>
+              <Text style={[styles.detailValue, { color: colors.text }]}>
+                {params.animalType} ({params.size})
               </Text>
-              <Text style={[styles.deliveryMessage, { color: colors.lightText }]}>
-                We'll call you shortly to confirm delivery details
+            </View>
+            
+            <View style={styles.detailRow}>
+              <Text style={[styles.detailLabel, { color: colors.lightText }]}>Price Option:</Text>
+              <Text style={[styles.detailValue, { color: colors.text }]}>{params.priceName}</Text>
+            </View>
+            
+            <View style={styles.detailRow}>
+              <Text style={[styles.detailLabel, { color: colors.lightText }]}>Total:</Text>
+              <Text style={[styles.detailValue, { color: colors.primary, fontWeight: '600' }]}>
+                ${params.price}
               </Text>
             </View>
-          </View>
-
-          <View style={[styles.card, { backgroundColor: colors.card }, createShadow(colors.text, { width: 0, height: 2 }, 0.1, 3)]}>
-            <View style={styles.cardHeader}>
-              <Ionicons name="layers-outline" size={24} color={colors.primary} />
-              <Text style={[styles.cardTitle, { color: colors.text }]}>Order Summary</Text>
-            </View>
             
-            <View style={styles.cardContent}>
-              <View style={styles.orderDetail}>
-                <Text style={[styles.detailLabel, { color: colors.lightText }]}>Animal Type:</Text>
-                <Text style={[styles.detailValue, { color: colors.text }]}>{animalType as string}</Text>
-              </View>
-              
-              <View style={styles.orderDetail}>
-                <Text style={[styles.detailLabel, { color: colors.lightText }]}>Size:</Text>
-                <Text style={[styles.detailValue, { color: colors.text }]}>{animalSize as string}</Text>
-              </View>
-              
-              <View style={styles.orderDetail}>
-                <Text style={[styles.detailLabel, { color: colors.lightText }]}>Cutting Style:</Text>
-                <Text style={[styles.detailValue, { color: colors.text }]}>{cuttingStyle as string}</Text>
-              </View>
-              
-              <View style={styles.orderDetail}>
-                <Text style={[styles.detailLabel, { color: colors.lightText }]}>Divided:</Text>
-                <Text style={[styles.detailValue, { color: colors.text }]}>{divided as string}</Text>
-              </View>
+            <View style={styles.detailRow}>
+              <Text style={[styles.detailLabel, { color: colors.lightText }]}>Cutting Style:</Text>
+              <Text style={[styles.detailValue, { color: colors.text }]}>{params.cuttingStyleName}</Text>
             </View>
+
+            {params.selectedOrgans && (
+              <View style={styles.detailRow}>
+                <Text style={[styles.detailLabel, { color: colors.lightText }]}>Selected Organs:</Text>
+                <Text style={[styles.detailValue, { color: colors.text }]}>{params.selectedOrgans}</Text>
+              </View>
+            )}
           </View>
 
-          <View style={[styles.card, { backgroundColor: colors.card }, createShadow(colors.text, { width: 0, height: 2 }, 0.1, 3)]}>
-            <View style={styles.cardHeader}>
-              <Ionicons name="location-outline" size={24} color={colors.primary} />
-              <Text style={[styles.cardTitle, { color: colors.text }]}>Delivery Details</Text>
+          {params.isGuest === 'true' && (
+            <View style={[styles.guestMessage, { backgroundColor: colors.card }]}>
+              <Ionicons name="information-circle-outline" size={24} color={colors.primary} />
+              <Text style={[styles.guestMessageText, { color: colors.text }]}>
+                Please save or share these details for future reference. You can track your order using the order ticket number above.
+              </Text>
             </View>
-            
-            <View style={styles.cardContent}>
-              <View style={styles.deliveryDetail}>
-                <Ionicons name="person-outline" size={20} color={colors.lightText} style={styles.detailIcon} />
-                <Text style={[styles.detailText, { color: colors.text }]}>{name as string}</Text>
-              </View>
-              
-              <View style={styles.deliveryDetail}>
-                <Ionicons name="call-outline" size={20} color={colors.lightText} style={styles.detailIcon} />
-                <Text style={[styles.detailText, { color: colors.text }]}>{phone as string}</Text>
-              </View>
-              
-              <View style={styles.deliveryDetail}>
-                <Ionicons name="location-outline" size={20} color={colors.lightText} style={styles.detailIcon} />
-                <Text style={[styles.detailText, { color: colors.text }]}>{address as string}</Text>
-              </View>
-            </View>
-          </View>
-
-          <Button 
-            title="Return to Home" 
-            onPress={handleBackToHome} 
-            style={styles.button}
-          />
+          )}
         </View>
       </ScrollView>
+
+      <View style={[styles.footer, { backgroundColor: colors.background }]}>
+        <Button
+          title="Share Details"
+          onPress={handleShare}
+          style={shareButtonStyle}
+          textStyle={{ color: colors.primary }}
+        />
+        <Button
+          title="Done"
+          onPress={handleDone}
+          style={styles.doneButton}
+        />
+      </View>
     </SafeAreaView>
   );
 }
@@ -153,109 +183,93 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
-  scrollContent: {
-    paddingBottom: 30,
-  },
-  header: {
-    paddingTop: 30,
-    paddingBottom: 40,
+  content: {
+    padding: 16,
     alignItems: 'center',
-    justifyContent: 'center',
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-    ...createShadow('#000', { width: 0, height: 2 }, 0.25, 3.84, 5), 
   },
   successIcon: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
+    marginTop: 32,
   },
-  headerTitle: {
-    fontSize: 30,
-    fontWeight: 'bold',
-    color: 'white',
-    marginBottom: 10,
+  title: {
+    fontSize: 24,
+    fontWeight: '600',
+    marginBottom: 24,
   },
-  headerSubtitle: {
-    fontSize: 16,
-    color: 'white',
-    opacity: 0.9,
-    textAlign: 'center',
-    paddingHorizontal: 20,
-  },
-  contentContainer: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-  },
-  card: {
-    borderRadius: 15,
-    marginBottom: 20,
-    overflow: 'hidden',
-  },
-  cardHeader: {
-    flexDirection: 'row',
+  ticketContainer: {
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(0,0,0,0.1)',
+    padding: 16,
+    borderRadius: 12,
+    width: '100%',
+    marginBottom: 24,
+    ...createShadow('#000', { width: 0, height: 2 }, 0.1, 3),
   },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginLeft: 10,
-  },
-  cardContent: {
-    padding: 20,
-  },
-  deliveryLabel: {
+  ticketLabel: {
     fontSize: 14,
-    marginBottom: 5,
-  },
-  deliveryDate: {
-    fontSize: 18,
-    fontWeight: '600',
     marginBottom: 8,
   },
-  deliveryMessage: {
-    fontSize: 13,
-    lineHeight: 20,
+  ticketNumber: {
+    fontSize: 32,
+    fontWeight: '700',
+    letterSpacing: 2,
+    marginBottom: 8,
   },
-  orderDetail: {
+  ticketInfo: {
+    fontSize: 12,
+  },
+  detailsCard: {
+    padding: 16,
+    borderRadius: 12,
+    width: '100%',
+    marginBottom: 24,
+    ...createShadow('#000', { width: 0, height: 2 }, 0.1, 3),
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 16,
+  },
+  detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(0,0,0,0.05)',
+    marginBottom: 12,
   },
   detailLabel: {
-    fontSize: 15,
+    fontSize: 16,
   },
   detailValue: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '500',
-    textTransform: 'capitalize',
-  },
-  deliveryDetail: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(0,0,0,0.05)',
-  },
-  detailIcon: {
-    marginRight: 10,
-  },
-  detailText: {
-    fontSize: 15,
     flex: 1,
+    textAlign: 'right',
   },
-  button: {
-    marginTop: 10,
-    marginBottom: 30,
+  guestMessage: {
+    flexDirection: 'row',
+    padding: 16,
+    borderRadius: 12,
+    width: '100%',
+    ...createShadow('#000', { width: 0, height: 2 }, 0.1, 3),
+  },
+  guestMessageText: {
+    flex: 1,
+    marginLeft: 12,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  footer: {
+    padding: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(0,0,0,0.1)',
+  },
+  shareButton: {
+    marginBottom: 8,
+  },
+  doneButton: {
+    marginBottom: Platform.OS === 'ios' ? 16 : 0,
   },
 }); 
