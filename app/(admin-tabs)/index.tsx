@@ -82,7 +82,29 @@ export default function AdminOrdersScreen() {
       
       const { data, error } = await supabase
         .from('orders')
-        .select('*')
+        .select(`
+          *,
+          animal_size_option:animal_size_options(
+            id,
+            animal:animals(
+              id,
+              title
+            ),
+            size:sizes(
+              id,
+              name
+            )
+          ),
+          cutting_style:cutting_styles(
+            id,
+            title
+          ),
+          price_option:price_options(
+            id,
+            name,
+            price
+          )
+        `)
         .order('created_at', { ascending: false });
       
       if (error) {
@@ -95,15 +117,16 @@ export default function AdminOrdersScreen() {
         customerName: order.customer_name || 'Unknown',
         date: order.created_at,
         status: order.status || 'Pending',
-        total: order.total_price || 0,
-        animalType: order.animal_type,
-        size: order.size,
-        cutStyle: order.cut_style,
-        divided: order.divided ? 'Yes' : 'No',
-        phoneNumber: order.phone_number,
-        address: order.delivery_address,
+        total: order.price_option?.price || 0,
+        animalType: order.animal_size_option?.animal?.title || 'Not specified',
+        size: order.animal_size_option?.size?.name || 'Not specified',
+        cutStyle: order.cutting_style?.title || 'Not specified',
+        divided: order.is_divided ? 'Yes' : 'No',
+        phoneNumber: order.phone_number || '',
+        address: order.address || '',
         user_id: order.user_id,
-        order_ticket: order.order_ticket
+        order_ticket: order.order_ticket,
+        created_at: order.created_at
       }));
       
       setOrders(formattedOrders);

@@ -133,6 +133,94 @@ export default function PriceOptionsTab({ animals, priceOptions: initialOptions,
     setModalVisible(true);
   };
   
+  const getSelectedAnimalSizes = () => {
+    if (!selectedAnimal) return [];
+    
+    // Create a map to store unique sizes with their IDs
+    const sizeMap = new Map<string, { id: string; name: string }>();
+    
+    // Get sizes from price options for the selected animal
+    priceOptions.forEach(option => {
+      if (
+        option.animal_size_option?.animal?.id === selectedAnimal &&
+        option.animal_size_option?.size?.id &&
+        option.animal_size_option?.size?.name
+      ) {
+        sizeMap.set(option.animal_size_option.size.id, {
+          id: option.animal_size_option.size.id,
+          name: option.animal_size_option.size.name
+        });
+      }
+    });
+
+    // Get sizes from the animals prop
+    const animal = animals.find(a => a.id === selectedAnimal);
+    if (animal?.sizes) {
+      animal.sizes.forEach((size: string) => {
+        if (size) {
+          sizeMap.set(size, { id: size, name: size });
+        }
+      });
+    }
+
+    // Convert map to array and sort by name
+    return Array.from(sizeMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+  };
+  
+  const checkExistingPriceOption = () => {
+    if (!selectedAnimal || !selectedAnimalSize || !name) return false;
+
+    const existingOption = priceOptions.find(option => 
+      option.animal_size_option?.animal?.id === selectedAnimal &&
+      option.animal_size_option?.size?.id === selectedAnimalSize &&
+      option.name.toLowerCase() === name.toLowerCase() &&
+      (!editingPriceOption || option.id !== editingPriceOption.id)
+    );
+
+    if (existingOption) {
+      const status = existingOption.is_active ? "active" : "inactive";
+      Alert.alert(
+        "Duplicate Price Option",
+        `A price option for this animal, size, and package name combination already exists (${status}). Each combination must be unique regardless of active status.\n\nExisting price: $${existingOption.price}`,
+        [{ text: "OK" }]
+      );
+      return true;
+    }
+
+    return false;
+  };
+  
+  const handleNameChange = (newName: string) => {
+    setName(newName);
+    if (selectedAnimal && selectedAnimalSize) {
+      const existingOption = priceOptions.find(option => 
+        option.animal_size_option?.animal?.id === selectedAnimal &&
+        option.animal_size_option?.size?.id === selectedAnimalSize &&
+        option.name.toLowerCase() === newName.toLowerCase() &&
+        (!editingPriceOption || option.id !== editingPriceOption.id)
+      );
+
+      if (existingOption) {
+        const status = existingOption.is_active ? "active" : "inactive";
+        Alert.alert(
+          "Warning",
+          `A ${status} price option already exists for this animal and size with the name "${newName}".\n\nExisting price: $${existingOption.price}\n\nPlease either:\n- Choose a different package name\n- Edit the existing price option`,
+          [{ text: "OK" }]
+        );
+      }
+    }
+  };
+  
+  const getSuggestedPackageNames = () => {
+    const names = new Set<string>();
+    priceOptions.forEach(option => {
+      if (option.name) {
+        names.add(option.name);
+      }
+    });
+    return Array.from(names).sort();
+  };
+  
   const handleSave = async () => {
     if (!selectedAnimal || !selectedAnimalSize || !name || !price) {
       Alert.alert("Error", "Please fill in all required fields.");
@@ -142,6 +230,31 @@ export default function PriceOptionsTab({ animals, priceOptions: initialOptions,
     const priceValue = parseFloat(price);
     if (isNaN(priceValue) || priceValue <= 0) {
       Alert.alert("Error", "Please enter a valid price.");
+      return;
+    }
+
+    // Check for existing price option with same combination
+    const existingOption = priceOptions.find(option => 
+      option.animal_size_option?.animal?.id === selectedAnimal &&
+      option.animal_size_option?.size?.id === selectedAnimalSize &&
+      option.name.toLowerCase() === name.toLowerCase() &&
+      (!editingPriceOption || option.id !== editingPriceOption.id)
+    );
+
+    if (existingOption) {
+      const status = existingOption.is_active ? "active" : "inactive";
+      Alert.alert(
+        "Error",
+        `Cannot save. A ${status} price option already exists for this combination:\n\n` +
+        `Animal: ${existingOption.animal_size_option?.animal?.title}\n` +
+        `Size: ${existingOption.animal_size_option?.size?.name}\n` +
+        `Package: ${existingOption.name}\n` +
+        `Price: $${existingOption.price}\n\n` +
+        `Please either:\n` +
+        `- Choose a different combination\n` +
+        `- Edit the existing price option`,
+        [{ text: "OK" }]
+      );
       return;
     }
     
@@ -462,13 +575,6 @@ export default function PriceOptionsTab({ animals, priceOptions: initialOptions,
     return Array.from(sizeMap.values()).sort((a, b) => a.name.localeCompare(b.name));
   };
   
-  // Get sizes for selected animal in modal
-  const getSelectedAnimalSizes = () => {
-    if (!selectedAnimal) return [];
-    const animal = animals.find(a => a.id === selectedAnimal);
-    return animal?.sizes || [];
-  };
-  
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -624,24 +730,24 @@ export default function PriceOptionsTab({ animals, priceOptions: initialOptions,
                         <TouchableOpacity
                           style={[
                             styles.pickerItem,
-                            selectedAnimalSize === item && styles.selectedPickerItem,
+                            selectedAnimalSize === item.id && styles.selectedPickerItem,
                             { 
-                              backgroundColor: selectedAnimalSize === item ? colors.primary : 'transparent',
+                              backgroundColor: selectedAnimalSize === item.id ? colors.primary : 'transparent',
                             }
                           ]}
-                          onPress={() => setSelectedAnimalSize(item)}
+                          onPress={() => setSelectedAnimalSize(item.id)}
                         >
                           <Text 
                             style={[
                               styles.pickerText,
-                              { color: selectedAnimalSize === item ? 'white' : colors.text }
+                              { color: selectedAnimalSize === item.id ? 'white' : colors.text }
                             ]}
                           >
-                            {item.charAt(0).toUpperCase() + item.slice(1)}
+                            {item.name.charAt(0).toUpperCase() + item.name.slice(1)}
                           </Text>
                         </TouchableOpacity>
                       )}
-                      keyExtractor={item => item}
+                      keyExtractor={item => item.id}
                       horizontal
                       showsHorizontalScrollIndicator={false}
                     />
@@ -653,10 +759,33 @@ export default function PriceOptionsTab({ animals, priceOptions: initialOptions,
               <TextInput
                 style={[styles.input, { backgroundColor: colors.card, color: colors.text, borderColor: colors.border }]}
                 value={name}
-                onChangeText={setName}
+                onChangeText={handleNameChange}
                 placeholder="e.g. Premium Package"
                 placeholderTextColor={colors.lightText}
               />
+
+              {/* Package Name Suggestions */}
+              {name.length > 0 && (
+                <View style={[styles.suggestionsContainer, { backgroundColor: colors.card }]}>
+                  <FlatList
+                    data={getSuggestedPackageNames().filter(n => 
+                      n.toLowerCase().includes(name.toLowerCase()) &&
+                      n.toLowerCase() !== name.toLowerCase()
+                    )}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={styles.suggestionItem}
+                        onPress={() => handleNameChange(item)}
+                      >
+                        <Text style={[styles.suggestionText, { color: colors.text }]}>{item}</Text>
+                      </TouchableOpacity>
+                    )}
+                    keyExtractor={item => item}
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                  />
+                </View>
+              )}
               
               <Text style={[styles.inputLabel, { color: colors.lightText }]}>Price ($) *</Text>
               <TextInput
@@ -884,5 +1013,19 @@ const styles = StyleSheet.create({
   pickerText: {
     fontSize: 14,
     fontWeight: '500',
+  },
+  suggestionsContainer: {
+    marginTop: -12,
+    marginBottom: 16,
+    padding: 8,
+    borderRadius: 8,
+  },
+  suggestionItem: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginRight: 8,
+  },
+  suggestionText: {
+    fontSize: 14,
   },
 }); 

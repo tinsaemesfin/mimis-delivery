@@ -9,12 +9,18 @@ import {
   Platform,
   Alert,
   ScrollView,
+  SafeAreaView,
+  TextStyle,
+  ViewStyle,
+  ActivityIndicator,
 } from 'react-native';
 import { Colors } from '../../../constants/Colors';
 import { useColorScheme } from '../../../hooks/useColorScheme';
 import Button from '../../../components/Button';
 import { Calendar, DateData } from 'react-native-calendars';
 import { format, isWithinInterval, parseISO } from 'date-fns';
+import { Ionicons } from '@expo/vector-icons';
+import { supabase } from '../../../utils/supabase';
 
 interface Order {
   id: string;
@@ -22,6 +28,15 @@ interface Order {
   date: string;
   status: string;
   total: number;
+  animalType?: string;
+  size?: string;
+  cutStyle?: string;
+  divided?: string;
+  phoneNumber?: string;
+  address?: string;
+  created_at?: string;
+  user_id?: string;
+  order_ticket?: string;
 }
 
 interface OrdersTabProps {
@@ -42,6 +57,10 @@ export default function OrdersTab({ orders, setSelectedOrder, openStatusModal, o
   const [calendarVisible, setCalendarVisible] = useState(false);
   const [selectingStartDate, setSelectingStartDate] = useState(true);
   const [filteredOrders, setFilteredOrders] = useState(orders);
+  const [orderDetailsVisible, setOrderDetailsVisible] = useState(false);
+  const [selectedOrderDetails, setSelectedOrderDetails] = useState<Order | null>(null);
+  const [statusDropdownVisible, setStatusDropdownVisible] = useState(false);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
   // Update filtered orders whenever filters change
   useEffect(() => {
@@ -127,6 +146,50 @@ export default function OrdersTab({ orders, setSelectedOrder, openStatusModal, o
       case 'delivered': return '#4CAF50';
       case 'cancelled': return '#F44336';
       default: return '#757575';
+    }
+  };
+
+  // Open order details modal
+  const showOrderDetails = (order: Order) => {
+    setSelectedOrderDetails(order);
+    setSelectedOrder(order);
+    setOrderDetailsVisible(true);
+  };
+
+  // Handle status update from modal
+  const handleStatusUpdate = async (order: Order, newStatus: string) => {
+    try {
+      setIsUpdatingStatus(true);
+      // Update order in Supabase
+      const { error } = await supabase
+        .from('orders')
+        .update({ status: newStatus })
+        .eq('id', order.id);
+      
+      if (error) {
+        throw error;
+      }
+      
+      // Update local state
+      const updatedOrders = orders.map(o => 
+        o.id === order.id ? { ...o, status: newStatus } : o
+      );
+      setFilteredOrders(updatedOrders);
+      
+      // Update the selected order details
+      if (selectedOrderDetails && selectedOrderDetails.id === order.id) {
+        setSelectedOrderDetails({ ...selectedOrderDetails, status: newStatus });
+      }
+      
+      // Close the dropdown
+      setStatusDropdownVisible(false);
+      
+      Alert.alert('Success', `Order status updated to ${newStatus}`);
+    } catch (err) {
+      console.error('Error updating order status:', err);
+      Alert.alert('Error', 'Failed to update order status. Please try again.');
+    } finally {
+      setIsUpdatingStatus(false);
     }
   };
 
@@ -284,10 +347,7 @@ export default function OrdersTab({ orders, setSelectedOrder, openStatusModal, o
         renderItem={({ item }) => (
           <TouchableOpacity
             style={[styles.orderCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-            onPress={() => {
-              setSelectedOrder(item);
-              openStatusModal(item);
-            }}
+            onPress={() => showOrderDetails(item)}
           >
             <View style={styles.orderHeader}>
               <Text style={[styles.orderCustomer, { color: colors.text }]}>{item.customerName}</Text>
@@ -315,6 +375,209 @@ export default function OrdersTab({ orders, setSelectedOrder, openStatusModal, o
           </View>
         }
       />
+      
+      {/* Order Details Modal */}
+      <Modal
+        visible={orderDetailsVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setOrderDetailsVisible(false)}
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderContent}>
+                <Text style={[styles.modalTitle, { color: colors.text }]}>Order Details</Text>
+                <View style={[styles.orderTicketBadge, { backgroundColor: colors.primary + '20' }]}>
+                  <Text style={[styles.orderTicketText, { color: colors.primary }]}>
+                    #{selectedOrderDetails?.order_ticket}
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity 
+                style={[styles.modalCloseButton, { backgroundColor: colors.card }]}
+                onPress={() => setOrderDetailsVisible(false)}
+              >
+                <Ionicons name="close" size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+            
+            {/* Status Selector at the top */}
+            {selectedOrderDetails && (
+              <View style={styles.statusSelectorContainer}>
+                <Text style={[styles.statusSelectorLabel, { color: colors.text }]}>Order Status</Text>
+                <TouchableOpacity
+                  style={[
+                    styles.statusSelector,
+                    { backgroundColor: colors.card, borderColor: colors.border },
+                    isUpdatingStatus && styles.disabledSelector
+                  ]}
+                  onPress={() => !isUpdatingStatus && setStatusDropdownVisible(!statusDropdownVisible)}
+                  disabled={isUpdatingStatus}
+                >
+                  <View style={styles.statusSelectorContent}>
+                    <View style={[styles.statusDot, { backgroundColor: getStatusColor(selectedOrderDetails.status) }]} />
+                    <Text style={[styles.statusSelectorText, { color: colors.text }]}>
+                      {isUpdatingStatus ? 'Updating...' : selectedOrderDetails.status.charAt(0).toUpperCase() + selectedOrderDetails.status.slice(1)}
+                    </Text>
+                  </View>
+                  {isUpdatingStatus ? (
+                    <ActivityIndicator size="small" color={colors.primary} />
+                  ) : (
+                    <Ionicons 
+                      name={statusDropdownVisible ? "chevron-up" : "chevron-down"} 
+                      size={24} 
+                      color={colors.text} 
+                    />
+                  )}
+                </TouchableOpacity>
+
+                {/* Status Options Dropdown */}
+                {statusDropdownVisible && !isUpdatingStatus && (
+                  <View style={[styles.statusDropdown, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                    {['pending', 'confirmed', 'processing', 'ready', 'delivered', 'cancelled'].map((status) => (
+                      <TouchableOpacity
+                        key={status}
+                        style={[
+                          styles.statusOption,
+                          selectedOrderDetails.status === status && styles.selectedStatusOption
+                        ]}
+                        onPress={() => {
+                          if (selectedOrderDetails && status !== selectedOrderDetails.status) {
+                            handleStatusUpdate(selectedOrderDetails, status);
+                          } else {
+                            setStatusDropdownVisible(false);
+                          }
+                        }}
+                        disabled={isUpdatingStatus}
+                      >
+                        <View style={[styles.statusDot, { backgroundColor: getStatusColor(status) }]} />
+                        <Text style={[styles.statusOptionText, { color: getStatusColor(status) }]}>
+                          {status.charAt(0).toUpperCase() + status.slice(1)}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </View>
+            )}
+
+            <ScrollView style={styles.modalBody}>
+              {selectedOrderDetails && (
+                <>
+                  {/* Customer Information Section */}
+                  <View style={styles.detailsSection}>
+                    <Text style={[styles.sectionTitle, { color: colors.text }]}>Customer Information</Text>
+                    <View style={[styles.sectionContent, { backgroundColor: colors.card }]}>
+                      <View style={styles.detailRow}>
+                        <View style={styles.detailItem}>
+                          <Ionicons name="person-outline" size={20} color={colors.primary} />
+                          <View style={styles.detailTextContainer}>
+                            <Text style={[styles.detailLabel, { color: colors.lightText }]}>Customer Name</Text>
+                            <Text style={[styles.detailValue, { color: colors.text }]}>
+                              {selectedOrderDetails.customerName}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+
+                      <View style={styles.detailRow}>
+                        <View style={styles.detailItem}>
+                          <Ionicons name="call-outline" size={20} color={colors.primary} />
+                          <View style={styles.detailTextContainer}>
+                            <Text style={[styles.detailLabel, { color: colors.lightText }]}>Phone Number</Text>
+                            <Text style={[styles.detailValue, { color: colors.text }]}>
+                              {selectedOrderDetails.phoneNumber || 'Not provided'}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+
+                      <View style={styles.detailRow}>
+                        <View style={styles.detailItem}>
+                          <Ionicons name="location-outline" size={20} color={colors.primary} />
+                          <View style={styles.detailTextContainer}>
+                            <Text style={[styles.detailLabel, { color: colors.lightText }]}>Delivery Address</Text>
+                            <Text style={[styles.detailValue, { color: colors.text }]}>
+                              {selectedOrderDetails.address || 'Not provided'}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Order Information Section */}
+                  <View style={styles.detailsSection}>
+                    <Text style={[styles.sectionTitle, { color: colors.text }]}>Order Information</Text>
+                    <View style={[styles.sectionContent, { backgroundColor: colors.card }]}>
+                      <View style={styles.detailRow}>
+                        <View style={styles.detailItem}>
+                          <Ionicons name="calendar-outline" size={20} color={colors.primary} />
+                          <View style={styles.detailTextContainer}>
+                            <Text style={[styles.detailLabel, { color: colors.lightText }]}>Order Date</Text>
+                            <Text style={[styles.detailValue, { color: colors.text }]}>
+                              {formatDate(selectedOrderDetails.date)}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+
+                      <View style={styles.detailRow}>
+                        <View style={styles.detailItem}>
+                          <Ionicons name="paw-outline" size={20} color={colors.primary} />
+                          <View style={styles.detailTextContainer}>
+                            <Text style={[styles.detailLabel, { color: colors.lightText }]}>Animal & Size</Text>
+                            <Text style={[styles.detailValue, { color: colors.text }]}>
+                              {selectedOrderDetails.animalType} - {selectedOrderDetails.size}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+
+                      <View style={styles.detailRow}>
+                        <View style={styles.detailItem}>
+                          <Ionicons name="cut-outline" size={20} color={colors.primary} />
+                          <View style={styles.detailTextContainer}>
+                            <Text style={[styles.detailLabel, { color: colors.lightText }]}>Cutting Style</Text>
+                            <Text style={[styles.detailValue, { color: colors.text }]}>
+                              {selectedOrderDetails.cutStyle}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+
+                      <View style={styles.detailRow}>
+                        <View style={styles.detailItem}>
+                          <Ionicons name="git-branch-outline" size={20} color={colors.primary} />
+                          <View style={styles.detailTextContainer}>
+                            <Text style={[styles.detailLabel, { color: colors.lightText }]}>Divided</Text>
+                            <Text style={[styles.detailValue, { color: colors.text }]}>
+                              {selectedOrderDetails.divided}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+
+                      <View style={styles.detailRow}>
+                        <View style={styles.detailItem}>
+                          <Ionicons name="cash-outline" size={20} color={colors.primary} />
+                          <View style={styles.detailTextContainer}>
+                            <Text style={[styles.detailLabel, { color: colors.lightText }]}>Total Amount</Text>
+                            <Text style={[styles.detailValue, { color: colors.text, fontWeight: 'bold' }]}>
+                              {formatCurrency(selectedOrderDetails.total)}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+                </>
+              )}
+            </ScrollView>
+          </View>
+        </SafeAreaView>
+      </Modal>
       
       {/* Calendar modal */}
       <Modal
@@ -401,7 +664,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   activeFilter: {
-    backgroundColor: '#D50000', // Primary color
+    backgroundColor: '#D50000',
   },
   statusFilterText: {
     fontSize: 14,
@@ -481,6 +744,7 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 12,
     fontWeight: '600',
+    textTransform: 'capitalize',
   },
   orderDetails: {
     flexDirection: 'row',
@@ -540,5 +804,141 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  modalContent: {
+    flex: 1,
+    marginTop: 50,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(0,0,0,0.1)',
+  },
+  modalHeaderContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    marginRight: 12,
+  },
+  orderTicketBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  orderTicketText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  modalBody: {
+    flex: 1,
+  },
+  detailsSection: {
+    padding: 16,
+  },
+  sectionContent: {
+    borderRadius: 12,
+    padding: 16,
+  },
+  detailRow: {
+    marginBottom: 16,
+  },
+  detailItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  detailTextContainer: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  detailLabel: {
+    fontSize: 12,
+    marginBottom: 4,
+  },
+  detailValue: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  statusSelectorContainer: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.1)',
+  },
+  statusSelectorLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 8,
+  },
+  statusSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  statusSelectorContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusSelectorText: {
+    fontSize: 16,
+    fontWeight: '500',
+    marginLeft: 8,
+  },
+  statusDropdown: {
+    position: 'absolute',
+    top: '100%',
+    left: 16,
+    right: 16,
+    marginTop: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    zIndex: 1000,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  statusOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.1)',
+  },
+  selectedStatusOption: {
+    backgroundColor: 'rgba(0,0,0,0.05)',
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 8,
+  },
+  statusOptionText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  modalCloseButton: {
+    padding: 8,
+    borderRadius: 8,
+    marginLeft: 8,
+  } as ViewStyle,
+  disabledSelector: {
+    opacity: 0.7,
   },
 }); 
