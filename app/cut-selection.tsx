@@ -43,7 +43,15 @@ interface CuttingStyle {
 interface Organ {
   id: string;
   name: string;
-  description: string;
+  is_active: boolean;
+}
+
+interface Extra {
+  id: string;
+  title: string;
+  description: string | null;
+  price: number;
+  is_active: boolean;
 }
 
 export default function CutSelectionScreen() {
@@ -57,10 +65,15 @@ export default function CutSelectionScreen() {
   const [selectedOrgans, setSelectedOrgans] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [organs, setOrgans] = useState<Organ[]>([]);
+  const [extras, setExtras] = useState<Extra[]>([]);
+  const [selectedExtras, setSelectedExtras] = useState<string[]>([]);
 
   // Fetch cutting styles when component mounts
   useEffect(() => {
     fetchCuttingStyles();
+    fetchOrgans();
+    fetchExtras();
   }, []);
 
   const fetchCuttingStyles = async () => {
@@ -95,6 +108,62 @@ export default function CutSelectionScreen() {
     }
   };
 
+  const fetchOrgans = async () => {
+    try {
+      console.log('Fetching organs...');
+      
+      const { data: organsData, error: organsError } = await supabase
+        .from('organs')
+        .select('id, name, is_active')
+        .eq('is_active', true)
+        .order('name');
+
+      if (organsError) {
+        console.error('Error fetching organs:', organsError);
+        setError('Failed to load organs');
+        return;
+      }
+
+      if (!organsData || organsData.length === 0) {
+        console.log('No organs found');
+        return;
+      }
+
+      console.log('Organs fetched successfully:', organsData);
+      setOrgans(organsData);
+    } catch (err) {
+      console.error('Unexpected error fetching organs:', err);
+      setError('An unexpected error occurred');
+    }
+  };
+
+  const fetchExtras = async () => {
+    try {
+      console.log('Fetching extras...');
+      
+      const { data: extrasData, error: extrasError } = await supabase
+        .from('extras')
+        .select('id, title, description, price, is_active')
+        .eq('is_active', true)
+        .order('title');
+
+      if (extrasError) {
+        console.error('Error fetching extras:', extrasError);
+        return;
+      }
+
+      if (!extrasData || extrasData.length === 0) {
+        console.log('No extras found');
+        return;
+      }
+
+      console.log('Extras fetched successfully:', extrasData);
+      setExtras(extrasData);
+    } catch (err) {
+      console.error('Unexpected error fetching extras:', err);
+    }
+  };
+
   const handleStyleSelect = (styleId: string) => {
     console.log('Selected cutting style:', styleId);
     setSelectedStyle(styleId);
@@ -111,6 +180,17 @@ export default function CutSelectionScreen() {
     console.log('Toggled organ:', organId);
   };
 
+  const handleExtraToggle = (extraId: string) => {
+    setSelectedExtras(prev => {
+      if (prev.includes(extraId)) {
+        return prev.filter(id => id !== extraId);
+      } else {
+        return [...prev, extraId];
+      }
+    });
+    console.log('Toggled extra:', extraId);
+  };
+
   const handleNextStep = () => {
     if (!selectedStyle) {
       alert('Please select a cutting style to continue');
@@ -118,17 +198,31 @@ export default function CutSelectionScreen() {
     }
 
     const selectedCutStyle = cuttingStyles.find(style => style.id === selectedStyle);
-    const selectedOrganNames = AVAILABLE_ORGANS
+    const selectedOrganNames = organs
       .filter(organ => selectedOrgans.includes(organ.id))
       .map(organ => organ.name);
+    
+    const selectedExtrasData = extras
+      .filter(extra => selectedExtras.includes(extra.id))
+      .map(extra => ({
+        id: extra.id,
+        title: extra.title,
+        price: extra.price
+      }));
+
+    const totalExtrasPrice = selectedExtrasData.reduce((sum, extra) => sum + extra.price, 0);
+    const finalPrice = parseFloat(params.price as string) + totalExtrasPrice;
     
     router.push({
       pathname: '/order-details',
       params: {
-        ...params, // Forward previous params
+        ...params,
         cuttingStyleId: selectedStyle,
         cuttingStyleName: selectedCutStyle?.title || '',
-        selectedOrgans: selectedOrganNames.join(', ')
+        selectedOrgans: selectedOrganNames.join(', '),
+        selectedExtras: JSON.stringify(selectedExtrasData),
+        totalExtrasPrice: totalExtrasPrice.toFixed(2),
+        finalPrice: finalPrice.toFixed(2)
       }
     });
   };
@@ -151,7 +245,11 @@ export default function CutSelectionScreen() {
           <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
           <TouchableOpacity 
             style={[styles.retryButton, { backgroundColor: colors.primary }]}
-            onPress={fetchCuttingStyles}
+            onPress={() => {
+              fetchCuttingStyles();
+              fetchOrgans();
+              fetchExtras();
+            }}
           >
             <Text style={styles.retryButtonText}>Retry</Text>
           </TouchableOpacity>
@@ -164,17 +262,6 @@ export default function CutSelectionScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
       
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Select Cutting Style</Text>
-        <View style={styles.placeholder} />
-      </View>
-
       <ScrollView style={styles.scrollView}>
         <View style={styles.selectionInfo}>
           <Text style={[styles.selectionText, { color: colors.text }]}>
@@ -232,48 +319,99 @@ export default function CutSelectionScreen() {
           )}
         />
 
-        <View style={styles.organsSection}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Would you like any organs?</Text>
-          <Text style={[styles.organSubtitle, { color: colors.lightText }]}>
-            Select the organs you'd like to include with your order
-          </Text>
-          {AVAILABLE_ORGANS.map((organ) => (
-            <TouchableOpacity
-              key={organ.id}
-              style={[
-                styles.organCard,
-                { backgroundColor: colors.card },
-                selectedOrgans.includes(organ.id) && styles.selectedOrgan,
-                createShadow(colors.text, { width: 0, height: 2 }, 0.1, 3)
-              ]}
-              onPress={() => handleOrganToggle(organ.id)}
-            >
-              <View style={styles.organContent}>
-                <Text style={[
-                  styles.organName,
-                  { color: colors.text },
-                  selectedOrgans.includes(organ.id) && styles.selectedText
-                ]}>
-                  {organ.name}
-                </Text>
-                <Text style={[
-                  styles.organDescription,
-                  { color: colors.lightText },
-                  selectedOrgans.includes(organ.id) && styles.selectedText
-                ]}>
-                  {organ.description}
-                </Text>
-              </View>
-              <View style={styles.checkbox}>
-                <Ionicons 
-                  name={selectedOrgans.includes(organ.id) ? "checkbox" : "square-outline"}
-                  size={24}
-                  color={selectedOrgans.includes(organ.id) ? colors.primary : colors.text}
-                />
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
+        {organs.length > 0 && (
+          <View style={styles.organsSection}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Would you like any organs?</Text>
+            <Text style={[styles.organSubtitle, { color: colors.lightText }]}>
+              Select the organs you'd like to include with your order
+            </Text>
+            {organs.map((organ) => (
+              <TouchableOpacity
+                key={organ.id}
+                style={[
+                  styles.organCard,
+                  { backgroundColor: colors.card },
+                  selectedOrgans.includes(organ.id) && styles.selectedOrgan,
+                  createShadow(colors.text, { width: 0, height: 2 }, 0.1, 3)
+                ]}
+                onPress={() => handleOrganToggle(organ.id)}
+              >
+                <View style={styles.organContent}>
+                  <Text style={[
+                    styles.organName,
+                    { color: colors.text },
+                    selectedOrgans.includes(organ.id) && styles.selectedText
+                  ]}>
+                    {organ.name}
+                  </Text>
+                </View>
+                <View style={styles.checkbox}>
+                  <Ionicons 
+                    name={selectedOrgans.includes(organ.id) ? "checkbox" : "square-outline"}
+                    size={24}
+                    color={selectedOrgans.includes(organ.id) ? '#FFFFFF' : colors.text}
+                  />
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {extras.length > 0 && (
+          <View style={styles.extrasSection}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Additional Services</Text>
+            <Text style={[styles.extraSubtitle, { color: colors.lightText }]}>
+              Select any additional services you'd like to add
+            </Text>
+            {extras.map((extra) => (
+              <TouchableOpacity
+                key={extra.id}
+                style={[
+                  styles.extraCard,
+                  { backgroundColor: colors.card },
+                  selectedExtras.includes(extra.id) && styles.selectedExtra,
+                  createShadow(colors.text, { width: 0, height: 2 }, 0.1, 3)
+                ]}
+                onPress={() => handleExtraToggle(extra.id)}
+              >
+                <View style={styles.extraContent}>
+                  <View style={styles.extraHeader}>
+                    <Text style={[
+                      styles.extraTitle,
+                      { color: colors.text },
+                      selectedExtras.includes(extra.id) && styles.selectedText
+                    ]}>
+                      {extra.title}
+                    </Text>
+                    <Text style={[
+                      styles.extraPrice,
+                      { color: colors.primary },
+                      selectedExtras.includes(extra.id) && styles.selectedText
+                    ]}>
+                      ${extra.price.toFixed(2)}
+                    </Text>
+                  </View>
+                  {extra.description && (
+                    <Text style={[
+                      styles.extraDescription,
+                      { color: colors.lightText },
+                      selectedExtras.includes(extra.id) && styles.selectedText
+                    ]}>
+                      {extra.description}
+                    </Text>
+                  )}
+                </View>
+                <View style={styles.checkbox}>
+                  <Ionicons 
+                    name={selectedExtras.includes(extra.id) ? "checkbox" : "square-outline"}
+                    size={24}
+                    color={selectedExtras.includes(extra.id) ? '#FFFFFF' : colors.text}
+                  />
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
       </ScrollView>
 
       <View style={[styles.footer, { backgroundColor: colors.background }]}>
@@ -340,6 +478,18 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    ...Platform.select({
+      android: {
+        elevation: 2,
+      },
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 3,
+      },
+    }),
   },
   styleContent: {
     flex: 1,
@@ -413,7 +563,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   organsSection: {
-    marginBottom: 100, // Space for footer
+    marginBottom: 20, // Space for footer
   },
   organCard: {
     flexDirection: 'row',
@@ -422,6 +572,18 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginBottom: 12,
     borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    ...Platform.select({
+      android: {
+        elevation: 2,
+      },
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 3,
+      },
+    }),
   },
   organContent: {
     flex: 1,
@@ -431,13 +593,53 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 4,
   },
-  organDescription: {
-    fontSize: 14,
-  },
   checkbox: {
     marginLeft: 12,
+    padding: 4,
   },
   selectedOrgan: {
-    backgroundColor: Colors.light.primary + '20', // Add transparency to primary color
+    backgroundColor: Colors.light.primary,
+    borderWidth: 0,
+  },
+  extrasSection: {
+    marginBottom: 50,
+  },
+  extraSubtitle: {
+    fontSize: 14,
+    marginHorizontal: 16,
+    marginBottom: 16,
+  },
+  extraCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+  },
+  extraContent: {
+    flex: 1,
+  },
+  extraHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  extraTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  extraPrice: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  extraDescription: {
+    fontSize: 14,
+  },
+  selectedExtra: {
+    backgroundColor: Colors.light.primary,
+    borderWidth: 0,
   },
 }); 

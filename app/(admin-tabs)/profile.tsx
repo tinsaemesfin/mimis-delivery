@@ -181,14 +181,7 @@ export default function ProfileScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'} />
       
-      <View style={styles.headerContainer}>
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.text }]}>Profile</Text>
-          <Text style={[styles.subtitle, { color: colors.lightText }]}>
-            Manage your account
-          </Text>
-        </View>
-      </View>
+      
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         <View style={[styles.profileCard, { backgroundColor: colors.card, borderColor: colors.border }]}>

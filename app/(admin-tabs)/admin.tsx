@@ -26,6 +26,8 @@ import CuttingStylesTab from '../components/admin-tabs/CuttingStylesTab';
 import OrdersTab from '../components/admin-tabs/OrdersTab';
 import DatesTab from '../components/admin-tabs/DatesTab';
 import PriceOptionsTab from '../components/admin-tabs/PriceOptionsTab';
+import OrgansTab from '../components/admin-tabs/OrgansTab';
+import ExtrasTab from '../components/admin-tabs/ExtrasTab';
 
 // Define types for our data - These need to match the component expectations
 type Animal = {
@@ -74,6 +76,20 @@ type PriceOption = {
   price: number;
   description: string;
   isActive: boolean;
+};
+
+type Organ = {
+  id: string;
+  name: string;
+  is_active: boolean;
+};
+
+type Extra = {
+  id: string;
+  title: string;
+  description: string;
+  price: number;
+  is_active: boolean;
 };
 
 // Mock data for the animals - ensure all properties exist
@@ -183,7 +199,32 @@ const initialPriceOptions: PriceOption[] = [
   },
 ];
 
-type AdminTab = 'animals' | 'cuttingStyles' | 'orders' | 'dates' | 'priceOptions';
+// Initial organs data
+const initialOrgans: Organ[] = [
+  { id: '1', name: 'Liver', is_active: true },
+  { id: '2', name: 'Heart', is_active: true },
+  { id: '3', name: 'Kidney', is_active: false },
+];
+
+// Initial extras data
+const initialExtras: Extra[] = [
+  { 
+    id: '1', 
+    title: 'Special Packaging', 
+    description: 'Premium vacuum-sealed packaging',
+    price: 15.99,
+    is_active: true
+  },
+  { 
+    id: '2', 
+    title: 'Express Processing', 
+    description: 'Priority processing of your order',
+    price: 25.00,
+    is_active: true
+  },
+];
+
+type AdminTab = 'animals' | 'cuttingStyles' | 'orders' | 'dates' | 'priceOptions' | 'organs' | 'extras';
 
 // This comment is a temporary fix for type compatibility issues.
 // There are conflicting type definitions between component files and this admin.tsx file.
@@ -229,6 +270,9 @@ export default function AdminScreen() {
   const [newDate, setNewDate] = useState('');
   const [newSlots, setNewSlots] = useState('');
 
+  const [organs, setOrgans] = useState<Organ[]>(initialOrgans);
+  const [extras, setExtras] = useState<Extra[]>(initialExtras);
+
   // Filter orders when date filter or orders list changes
   useEffect(() => {
     if (dateFilterVisible) {
@@ -263,8 +307,11 @@ export default function AdminScreen() {
     const newAnimal = {
       id: (animals.length + 1).toString(),
       name: newAnimalName,
+      title: newAnimalName,
+      description: `${newAnimalName} description`,
       sizes: selectedSizes,
-      active: true
+      active: true,
+      isActive: true
     };
     
     setAnimals([...animals, newAnimal]);
@@ -471,14 +518,12 @@ export default function AdminScreen() {
     return (
       <View style={styles.tabsContainer}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsScroll}>
-
           <TouchableOpacity
             style={[
               styles.tab,
               activeTab === 'animals' && { ...styles.activeTab, borderBottomColor: colors.primary }
             ]}
             onPress={() => {
-              // Defer tab change to ensure it happens after layout is ready
               setTimeout(() => setActiveTab('animals'), 0);
             }}
           >
@@ -498,7 +543,6 @@ export default function AdminScreen() {
               activeTab === 'cuttingStyles' && { ...styles.activeTab, borderBottomColor: colors.primary }
             ]}
             onPress={() => {
-              // Defer tab change to ensure it happens after layout is ready
               setTimeout(() => setActiveTab('cuttingStyles'), 0);
             }}
           >
@@ -518,7 +562,6 @@ export default function AdminScreen() {
               activeTab === 'dates' && { ...styles.activeTab, borderBottomColor: colors.primary }
             ]}
             onPress={() => {
-              // Defer tab change to ensure it happens after layout is ready
               setTimeout(() => setActiveTab('dates'), 0);
             }}
           >
@@ -538,7 +581,6 @@ export default function AdminScreen() {
               activeTab === 'priceOptions' && { ...styles.activeTab, borderBottomColor: colors.primary }
             ]}
             onPress={() => {
-              // Defer tab change to ensure it happens after layout is ready
               setTimeout(() => setActiveTab('priceOptions'), 0);
             }}
           >
@@ -551,6 +593,44 @@ export default function AdminScreen() {
               Price Options
             </Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.tab,
+              activeTab === 'organs' && { ...styles.activeTab, borderBottomColor: colors.primary }
+            ]}
+            onPress={() => {
+              setTimeout(() => setActiveTab('organs'), 0);
+            }}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                activeTab === 'organs' && { ...styles.activeTabText, color: colors.primary }
+              ]}
+            >
+              Organs
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.tab,
+              activeTab === 'extras' && { ...styles.activeTab, borderBottomColor: colors.primary }
+            ]}
+            onPress={() => {
+              setTimeout(() => setActiveTab('extras'), 0);
+            }}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                activeTab === 'extras' && { ...styles.activeTabText, color: colors.primary }
+              ]}
+            >
+              Extras
+            </Text>
+          </TouchableOpacity>
           
         </ScrollView>
       </View>
@@ -560,8 +640,6 @@ export default function AdminScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar style="dark" />
-      
-      
       
       {renderTabs()}
       
@@ -597,6 +675,18 @@ export default function AdminScreen() {
             animals={animals as any}
             priceOptions={priceOptions as any}
             setPriceOptions={setPriceOptions as any}
+          />
+        )}
+        {activeTab === 'organs' && (
+          <OrgansTab
+            organs={organs}
+            setOrgans={setOrgans}
+          />
+        )}
+        {activeTab === 'extras' && (
+          <ExtrasTab
+            extras={extras}
+            setExtras={setExtras}
           />
         )}
       </View>

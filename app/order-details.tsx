@@ -42,12 +42,19 @@ interface OrderDetails {
   address: string;
   email: string;
   isValidZip: boolean;
+  notes: string;
 }
 
 interface Profile {
   email?: string;
   phone?: string;
   full_name?: string;
+}
+
+interface Extra {
+  id: string;
+  title: string;
+  price: number;
 }
 
 const formatPhoneNumber = (phoneNumber: string) => {
@@ -161,7 +168,8 @@ export default function OrderDetailsScreen() {
     zipCode: '',
     address: '',
     email: user?.email || '',
-    isValidZip: false
+    isValidZip: false,
+    notes: '',
   });
 
   // Update order details when profile is loaded
@@ -217,7 +225,11 @@ export default function OrderDetailsScreen() {
 
   const handleDateSelect = (dateId: string) => {
     console.log('Selected delivery date:', dateId);
-    setSelectedDate(dateId);
+    if (selectedDate === dateId) {
+      setSelectedDate(null);
+    } else {
+      setSelectedDate(dateId);
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -301,10 +313,8 @@ export default function OrderDetailsScreen() {
     }
 
     try {
-      // Generate a unique order ticket
       const orderTicket = generateOrderTicket();
       
-      // Create the order in the database
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
         .insert({
@@ -321,7 +331,8 @@ export default function OrderDetailsScreen() {
           delivery_date_id: selectedDate,
           order_ticket: orderTicket,
           status: 'pending',
-          payment_status: 'unpaid' // Since it's cash on delivery
+          payment_status: 'unpaid',
+          notes: orderDetails.notes || null
         })
         .select()
         .single();
@@ -332,7 +343,6 @@ export default function OrderDetailsScreen() {
         return;
       }
 
-      // Navigate to confirmation screen
       router.push({
         pathname: '/order-confirmation' as const,
         params: {
@@ -353,6 +363,10 @@ export default function OrderDetailsScreen() {
     }
   };
 
+  const selectedExtras = params.selectedExtras ? JSON.parse(params.selectedExtras as string) as Extra[] : [];
+  const totalExtrasPrice = params.totalExtrasPrice ? parseFloat(params.totalExtrasPrice as string) : 0;
+  const finalPrice = params.finalPrice ? parseFloat(params.finalPrice as string) : parseFloat(params.price as string);
+
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -368,18 +382,9 @@ export default function OrderDetailsScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
       
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Order Details</Text>
-        <View style={styles.placeholder} />
-      </View>
+      
 
-      <ScrollView style={styles.scrollView}>
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {/* Order Summary Section */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Order Summary</Text>
@@ -388,29 +393,76 @@ export default function OrderDetailsScreen() {
               <Text style={[styles.summaryLabel, { color: colors.lightText }]}>Animal Type:</Text>
               <Text style={[styles.summaryValue, { color: colors.text }]}>{params.animalType}</Text>
             </View>
+            <View style={styles.divider} />
             <View style={styles.summaryRow}>
               <Text style={[styles.summaryLabel, { color: colors.lightText }]}>Size:</Text>
               <Text style={[styles.summaryValue, { color: colors.text }]}>{params.size}</Text>
             </View>
+            <View style={styles.divider} />
             <View style={styles.summaryRow}>
               <Text style={[styles.summaryLabel, { color: colors.lightText }]}>Price Option:</Text>
               <Text style={[styles.summaryValue, { color: colors.text }]}>{params.priceName}</Text>
             </View>
+            <View style={styles.divider} />
             <View style={styles.summaryRow}>
               <Text style={[styles.summaryLabel, { color: colors.lightText }]}>Price:</Text>
-              <Text style={[styles.summaryValue, { color: colors.primary, fontWeight: '600' }]}>
+              <Text style={[styles.summaryValue, { color: colors.primary, fontWeight: '700' }]}>
                 ${params.price}
               </Text>
             </View>
+            <View style={styles.divider} />
             <View style={styles.summaryRow}>
               <Text style={[styles.summaryLabel, { color: colors.lightText }]}>Cutting Style:</Text>
               <Text style={[styles.summaryValue, { color: colors.text }]}>{params.cuttingStyleName}</Text>
             </View>
             {params.selectedOrgans && (
-              <View style={styles.summaryRow}>
-                <Text style={[styles.summaryLabel, { color: colors.lightText }]}>Selected Organs:</Text>
-                <Text style={[styles.summaryValue, { color: colors.text }]}>{params.selectedOrgans}</Text>
-              </View>
+              <>
+                <View style={styles.divider} />
+                <View style={styles.summaryRow}>
+                  <Text style={[styles.summaryLabel, { color: colors.lightText }]}>Selected Organs:</Text>
+                  <View style={styles.organsContainer}>
+                    {(typeof params.selectedOrgans === 'string' ? params.selectedOrgans.split(', ') : []).map((organ: string, index: number) => (
+                      <View key={index} style={styles.organChip}>
+                        <Text style={styles.organChipText}>{organ}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              </>
+            )}
+            {selectedExtras.length > 0 && (
+              <>
+                <View style={styles.divider} />
+                <View style={styles.summaryRow}>
+                  <Text style={[styles.summaryLabel, { color: colors.lightText }]}>Additional Services:</Text>
+                  <View style={styles.extrasContainer}>
+                    {selectedExtras.map((extra, index) => (
+                      <View key={index} style={styles.extraItem}>
+                        <Text style={[styles.extraTitle, { color: colors.text }]}>
+                          {extra.title}
+                        </Text>
+                        <Text style={[styles.extraPrice, { color: colors.primary }]}>
+                          ${extra.price.toFixed(2)}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+                <View style={styles.divider} />
+                <View style={styles.summaryRow}>
+                  <Text style={[styles.summaryLabel, { color: colors.lightText }]}>Extras Total:</Text>
+                  <Text style={[styles.summaryValue, { color: colors.primary }]}>
+                    ${totalExtrasPrice.toFixed(2)}
+                  </Text>
+                </View>
+                <View style={styles.divider} />
+                <View style={styles.summaryRow}>
+                  <Text style={[styles.summaryLabel, { color: colors.lightText, fontWeight: '600' }]}>Final Price:</Text>
+                  <Text style={[styles.summaryValue, { color: colors.primary, fontWeight: '700', fontSize: 18 }]}>
+                    ${finalPrice.toFixed(2)}
+                  </Text>
+                </View>
+              </>
             )}
           </View>
         </View>
@@ -430,10 +482,27 @@ export default function OrderDetailsScreen() {
                   styles.dateCard,
                   { backgroundColor: colors.card },
                   selectedDate === date.id && styles.selectedDate,
-                  createShadow(colors.text, { width: 0, height: 2 }, 0.1, 3)
+                  Platform.select({
+                    android: {
+                      elevation: selectedDate === date.id ? 8 : 2,
+                    },
+                    ios: {
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: selectedDate === date.id ? 4 : 2 },
+                      shadowOpacity: selectedDate === date.id ? 0.2 : 0.1,
+                      shadowRadius: selectedDate === date.id ? 8 : 4,
+                    },
+                  }),
                 ]}
                 onPress={() => handleDateSelect(date.id)}
               >
+                <View style={styles.dateIconContainer}>
+                  <Ionicons 
+                    name="calendar" 
+                    size={24} 
+                    color={selectedDate === date.id ? '#FFFFFF' : colors.primary} 
+                  />
+                </View>
                 <Text style={[
                   styles.dateText,
                   { color: colors.text },
@@ -454,64 +523,74 @@ export default function OrderDetailsScreen() {
         </View>
 
         {/* Customer Details Section */}
-        <View style={styles.section}>
+        <View style={[styles.section, styles.lastSection]}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Delivery Details</Text>
-          
-          {/* Always show name and phone fields for both logged-in and guest users */}
-          <TextInput
-            style={[styles.input, { backgroundColor: colors.card, color: colors.text }]}
-            placeholder="Full Name"
-            placeholderTextColor={colors.lightText}
-            value={orderDetails.customerName}
-            onChangeText={(text) => setOrderDetails(prev => ({ ...prev, customerName: text }))}
-          />
-          <TextInput
-            style={[styles.input, { backgroundColor: colors.card, color: colors.text }]}
-            placeholder="Phone Number (XXX) XXX-XXXX"
-            placeholderTextColor={colors.lightText}
-            value={orderDetails.phoneNumber}
-            onChangeText={handlePhoneChange}
-            keyboardType="phone-pad"
-            maxLength={14}
-          />
-          
-          {/* Only show email field for guest users */}
-          {!user && (
+          <View style={styles.formContainer}>
             <TextInput
               style={[styles.input, { backgroundColor: colors.card, color: colors.text }]}
-              placeholder="Email"
+              placeholder="Full Name"
               placeholderTextColor={colors.lightText}
-              value={orderDetails.email}
-              onChangeText={(text) => setOrderDetails(prev => ({ ...prev, email: text }))}
-              keyboardType="email-address"
-              autoCapitalize="none"
+              value={orderDetails.customerName}
+              onChangeText={(text) => setOrderDetails(prev => ({ ...prev, customerName: text }))}
             />
-          )}
-          
-          <TextInput
-            style={[styles.input, { backgroundColor: colors.card, color: colors.text }]}
-            placeholder="ZIP Code (Must be within 70 miles of DC)"
-            placeholderTextColor={colors.lightText}
-            value={orderDetails.zipCode}
-            onChangeText={(text) => {
-              const cleaned = text.replace(/\D/g, '').slice(0, 5);
-              setOrderDetails(prev => ({ ...prev, zipCode: cleaned, isValidZip: false }));
-              if (cleaned.length === 5) {
-                validateZipCode(cleaned);
-              }
-            }}
-            keyboardType="numeric"
-            maxLength={5}
-          />
-          
-          <TextInput
-            style={[styles.input, { backgroundColor: colors.card, color: colors.text }]}
-            placeholder="Street Address"
-            placeholderTextColor={colors.lightText}
-            value={orderDetails.address}
-            onChangeText={(text) => setOrderDetails(prev => ({ ...prev, address: text }))}
-            multiline
-          />
+            <TextInput
+              style={[styles.input, { backgroundColor: colors.card, color: colors.text }]}
+              placeholder="Phone Number (XXX) XXX-XXXX"
+              placeholderTextColor={colors.lightText}
+              value={orderDetails.phoneNumber}
+              onChangeText={handlePhoneChange}
+              keyboardType="phone-pad"
+              maxLength={14}
+            />
+            
+            {!user && (
+              <TextInput
+                style={[styles.input, { backgroundColor: colors.card, color: colors.text }]}
+                placeholder="Email"
+                placeholderTextColor={colors.lightText}
+                value={orderDetails.email}
+                onChangeText={(text) => setOrderDetails(prev => ({ ...prev, email: text }))}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+            )}
+            
+            <TextInput
+              style={[styles.input, { backgroundColor: colors.card, color: colors.text }]}
+              placeholder="ZIP Code (Must be within 70 miles of DC)"
+              placeholderTextColor={colors.lightText}
+              value={orderDetails.zipCode}
+              onChangeText={(text) => {
+                const cleaned = text.replace(/\D/g, '').slice(0, 5);
+                setOrderDetails(prev => ({ ...prev, zipCode: cleaned, isValidZip: false }));
+                if (cleaned.length === 5) {
+                  validateZipCode(cleaned);
+                }
+              }}
+              keyboardType="numeric"
+              maxLength={5}
+            />
+            
+            <TextInput
+              style={[styles.input, styles.addressInput, { backgroundColor: colors.card, color: colors.text }]}
+              placeholder="Street Address"
+              placeholderTextColor={colors.lightText}
+              value={orderDetails.address}
+              onChangeText={(text) => setOrderDetails(prev => ({ ...prev, address: text }))}
+              multiline
+              numberOfLines={3}
+            />
+
+            <TextInput
+              style={[styles.input, styles.notesInput, { backgroundColor: colors.card, color: colors.text }]}
+              placeholder="Add any special notes or requests (optional)"
+              placeholderTextColor={colors.lightText}
+              value={orderDetails.notes}
+              onChangeText={(text) => setOrderDetails(prev => ({ ...prev, notes: text }))}
+              multiline
+              numberOfLines={3}
+            />
+          </View>
         </View>
       </ScrollView>
 
@@ -558,66 +637,145 @@ const styles = StyleSheet.create({
   },
   section: {
     marginBottom: 24,
+    paddingHorizontal: 16,
+  },
+  lastSection: {
+    marginBottom: 100, // Extra space for footer
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    marginHorizontal: 16,
-    marginBottom: 12,
+    fontSize: 22,
+    fontWeight: '700',
+    marginBottom: 16,
+    letterSpacing: -0.5,
   },
   summaryCard: {
-    marginHorizontal: 16,
-    padding: 16,
-    borderRadius: 12,
-    ...createShadow('#000', { width: 0, height: 2 }, 0.1, 3),
+    padding: 20,
+    borderRadius: 16,
+    ...Platform.select({
+      android: {
+        elevation: 4,
+      },
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+      },
+    }),
   },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    marginVertical: 4,
   },
   summaryLabel: {
     fontSize: 16,
+    flex: 1,
   },
   summaryValue: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
+    flex: 2,
+    textAlign: 'right',
+  },
+  organsContainer: {
+    flex: 2,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    gap: 8,
+  },
+  organChip: {
+    backgroundColor: Colors.light.primary + '20',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginBottom: 4,
+  },
+  organChipText: {
+    color: Colors.light.primary,
+    fontSize: 14,
+    fontWeight: '600',
   },
   datesContainer: {
     paddingHorizontal: 16,
+    paddingVertical: 8,
   },
   dateCard: {
     padding: 16,
-    borderRadius: 12,
-    marginRight: 12,
-    minWidth: 200,
+    borderRadius: 16,
+    marginRight: 16,
+    width: 220,
+    alignItems: 'center',
+  },
+  dateIconContainer: {
+    marginBottom: 12,
   },
   selectedDate: {
     backgroundColor: Colors.light.primary,
+    transform: [{ scale: 1.02 }],
   },
   dateText: {
     fontSize: 16,
     fontWeight: '600',
-    marginBottom: 4,
+    marginBottom: 8,
+    textAlign: 'center',
   },
   slotsText: {
     fontSize: 14,
+    textAlign: 'center',
   },
   selectedText: {
     color: 'white',
   },
+  formContainer: {
+    gap: 12,
+  },
   input: {
-    marginHorizontal: 16,
-    marginBottom: 12,
-    padding: 12,
-    borderRadius: 8,
+    padding: 16,
+    borderRadius: 12,
     fontSize: 16,
-    minHeight: 48,
+    ...Platform.select({
+      android: {
+        elevation: 2,
+      },
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+    }),
+  },
+  addressInput: {
+    minHeight: 100,
+    textAlignVertical: 'top',
+  },
+  notesInput: {
+    minHeight: 100,
+    textAlignVertical: 'top',
   },
   footer: {
     padding: 16,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(0,0,0,0.1)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.05)',
+    ...Platform.select({
+      android: {
+        elevation: 8,
+      },
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+      },
+    }),
   },
   continueButton: {
     marginBottom: Platform.OS === 'ios' ? 16 : 0,
@@ -630,6 +788,24 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 16,
     fontSize: 16,
+  },
+  extrasContainer: {
+    flex: 2,
+  },
+  extraItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  extraTitle: {
+    fontSize: 14,
+    flex: 1,
+  },
+  extraPrice: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 8,
   },
 }); 
 
