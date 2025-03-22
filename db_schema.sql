@@ -262,3 +262,33 @@ create trigger update_orders_updated_at
   before update on orders
   for each row
   execute function update_updated_at_column(); 
+
+
+  
+-- Add order_ticket column to orders table
+ALTER TABLE orders ADD COLUMN order_ticket char(6);
+
+-- Make order_ticket not null after adding it
+UPDATE orders SET order_ticket = 'AAA000' WHERE order_ticket IS NULL;
+ALTER TABLE orders ALTER COLUMN order_ticket SET NOT NULL;
+
+-- Create unique index for order_ticket
+CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_ticket ON orders(order_ticket);
+
+-- Create trigger to ensure order_ticket is uppercase
+CREATE OR REPLACE FUNCTION ensure_uppercase_order_ticket()
+RETURNS trigger AS $$
+BEGIN
+  NEW.order_ticket = upper(NEW.order_ticket);
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Drop the trigger if it exists
+DROP TRIGGER IF EXISTS trg_ensure_uppercase_order_ticket ON orders;
+
+-- Create the trigger
+CREATE TRIGGER trg_ensure_uppercase_order_ticket
+  BEFORE INSERT OR UPDATE ON orders
+  FOR EACH ROW
+  EXECUTE FUNCTION ensure_uppercase_order_ticket();

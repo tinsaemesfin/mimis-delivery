@@ -61,6 +61,10 @@ function RootLayoutNav() {
             headerShown: false,
             gestureEnabled: false, // Prevent going back to sign-in
           }} />
+          <Stack.Screen name="(admin-tabs)" options={{ 
+            headerShown: false,
+            gestureEnabled: false, // Prevent going back to sign-in
+          }} />
           <Stack.Screen name="animal-selection" options={{ 
             title: 'Select Animal',
             headerBackTitle: 'Back',

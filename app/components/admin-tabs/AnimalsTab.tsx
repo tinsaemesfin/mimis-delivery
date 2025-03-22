@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -8,16 +8,22 @@ import {
   Modal,
   TextInput,
   Alert,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { Colors } from '../../../constants/Colors';
 import { useColorScheme } from '../../../hooks/useColorScheme';
 import Button from '../../../components/Button';
+import { supabase } from '../../../utils/supabase';
+import { Ionicons } from '@expo/vector-icons';
 
 interface AnimalItem {
   id: string;
-  name: string;
-  sizes: string[];
-  active: boolean;
+  title: string;
+  description: string;
+  image_url?: string;
+  is_active: boolean;
+  sizes?: string[];
 }
 
 interface AnimalsTabProps {
@@ -25,103 +31,355 @@ interface AnimalsTabProps {
   setAnimals: React.Dispatch<React.SetStateAction<AnimalItem[]>>;
 }
 
-export default function AnimalsTab({ animals, setAnimals }: AnimalsTabProps) {
+export default function AnimalsTab({ animals: initialAnimals, setAnimals: setParentAnimals }: AnimalsTabProps) {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme || 'light'];
   
-  const [modalVisible, setModalVisible] = useState(false);
-  const [newAnimalName, setNewAnimalName] = useState('');
-  const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
+  const [animals, setAnimals] = useState<AnimalItem[]>([]);
+  const [filteredAnimals, setFilteredAnimals] = useState<AnimalItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showActiveOnly, setShowActiveOnly] = useState(false);
   
-  // Function to handle adding a new animal
-  const handleAddAnimal = () => {
+  const [modalVisible, setModalVisible] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [currentAnimal, setCurrentAnimal] = useState<AnimalItem | null>(null);
+  const [newAnimalName, setNewAnimalName] = useState('');
+  const [newAnimalDescription, setNewAnimalDescription] = useState('');
+  
+  // Fetch animals from Supabase
+  const fetchAnimals = async () => {
+    try {
+      setError(null);
+      setLoading(true);
+      
+      const { data, error } = await supabase
+        .from('animals')
+        .select('*')
+        .order('title', { ascending: true });
+      
+      if (error) {
+        throw error;
+      }
+      
+      // Transform the data to match our component's expectations
+      const transformedData = data.map(animal => ({
+        id: animal.id,
+        title: animal.title,
+        description: animal.description,
+        image_url: animal.image_url,
+        is_active: animal.is_active
+      }));
+      
+      setAnimals(transformedData);
+      setParentAnimals(transformedData);
+      applyFilters(transformedData, searchQuery, showActiveOnly);
+    } catch (err) {
+      console.error('Error fetching animals:', err);
+      setError('Failed to load animals');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+  
+  // Apply filters to the animals list
+  const applyFilters = (animalsList: AnimalItem[], query: string, activeOnly: boolean) => {
+    let filtered = [...animalsList];
+    
+    // Filter by search query
+    if (query.trim() !== '') {
+      const searchTerms = query.toLowerCase().trim().split(' ');
+      filtered = filtered.filter(animal => 
+        searchTerms.every(term => 
+          animal.title.toLowerCase().includes(term) ||
+          (animal.description && animal.description.toLowerCase().includes(term))
+        )
+      );
+    }
+    
+    // Filter by active status
+    if (activeOnly) {
+      filtered = filtered.filter(animal => animal.is_active);
+    }
+    
+    setFilteredAnimals(filtered);
+  };
+  
+  // Add a new animal
+  const addAnimal = async () => {
     if (newAnimalName.trim() === '') {
       Alert.alert('Error', 'Please enter an animal name');
       return;
     }
     
-    if (selectedSizes.length === 0) {
-      Alert.alert('Error', 'Please select at least one size');
+    try {
+      setLoading(true);
+      
+      const newAnimal = {
+        title: newAnimalName.trim(),
+        description: newAnimalDescription.trim(),
+        is_active: true
+      };
+      
+      const { data, error } = await supabase
+        .from('animals')
+        .insert([newAnimal])
+        .select();
+      
+      if (error) {
+        throw error;
+      }
+      
+      Alert.alert('Success', 'Animal added successfully');
+      setNewAnimalName('');
+      setNewAnimalDescription('');
+      setModalVisible(false);
+      
+      // Refresh the animals list
+      fetchAnimals();
+    } catch (err) {
+      console.error('Error adding animal:', err);
+      Alert.alert('Error', 'Failed to add animal');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Update an existing animal
+  const updateAnimal = async () => {
+    if (!currentAnimal) return;
+    
+    if (newAnimalName.trim() === '') {
+      Alert.alert('Error', 'Please enter an animal name');
       return;
     }
     
-    const newAnimal = {
-      id: (animals.length + 1).toString(),
-      name: newAnimalName,
-      sizes: selectedSizes,
-      active: true
-    };
-    
-    setAnimals([...animals, newAnimal]);
-    setNewAnimalName('');
-    setSelectedSizes([]);
-    setModalVisible(false);
+    try {
+      setLoading(true);
+      
+      const updatedAnimal = {
+        title: newAnimalName.trim(),
+        description: newAnimalDescription.trim()
+      };
+      
+      const { error } = await supabase
+        .from('animals')
+        .update(updatedAnimal)
+        .eq('id', currentAnimal.id);
+      
+      if (error) {
+        throw error;
+      }
+      
+      Alert.alert('Success', 'Animal updated successfully');
+      setNewAnimalName('');
+      setNewAnimalDescription('');
+      setModalVisible(false);
+      setEditMode(false);
+      setCurrentAnimal(null);
+      
+      // Refresh the animals list
+      fetchAnimals();
+    } catch (err) {
+      console.error('Error updating animal:', err);
+      Alert.alert('Error', 'Failed to update animal');
+    } finally {
+      setLoading(false);
+    }
   };
   
-  // Function to toggle animal active status
-  const toggleAnimalStatus = (id: string) => {
-    setAnimals(
-      animals.map(animal => 
-        animal.id === id ? { ...animal, active: !animal.active } : animal
-      )
-    );
+  // Toggle animal active status
+  const toggleAnimalStatus = async (animal: AnimalItem) => {
+    try {
+      setLoading(true);
+      
+      const { error } = await supabase
+        .from('animals')
+        .update({ is_active: !animal.is_active })
+        .eq('id', animal.id);
+      
+      if (error) {
+        throw error;
+      }
+      
+      // Refresh the animals list
+      fetchAnimals();
+    } catch (err) {
+      console.error('Error toggling animal status:', err);
+      Alert.alert('Error', 'Failed to update animal status');
+    } finally {
+      setLoading(false);
+    }
   };
+  
+  // Open edit modal
+  const openEditModal = (animal: AnimalItem) => {
+    setCurrentAnimal(animal);
+    setNewAnimalName(animal.title);
+    setNewAnimalDescription(animal.description || '');
+    setEditMode(true);
+    setModalVisible(true);
+  };
+  
+  // Handle refresh
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchAnimals();
+  };
+  
+  // Initial data fetch
+  useEffect(() => {
+    fetchAnimals();
+  }, []);
+  
+  // Apply filters when search query or active filter changes
+  useEffect(() => {
+    applyFilters(animals, searchQuery, showActiveOnly);
+  }, [searchQuery, showActiveOnly, animals]);
   
   return (
     <View style={styles.tabContent}>
+      <View style={styles.searchFilterContainer}>
+        <View style={[styles.searchContainer, { borderColor: colors.border }]}>
+          <Ionicons name="search" size={20} color={colors.lightText} />
+          <TextInput
+            style={[styles.searchInput, { color: colors.text }]}
+            placeholder="Search animals..."
+            placeholderTextColor={colors.lightText}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Ionicons name="close-circle" size={20} color={colors.lightText} />
+            </TouchableOpacity>
+          )}
+        </View>
+        
+        <TouchableOpacity
+          style={[
+            styles.filterButton,
+            showActiveOnly && { backgroundColor: colors.primary + '20' }
+          ]}
+          onPress={() => setShowActiveOnly(!showActiveOnly)}
+        >
+          <Text style={[
+            styles.filterButtonText,
+            showActiveOnly && { color: colors.primary }
+          ]}>
+            {showActiveOnly ? 'Active Only' : 'All Animals'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+      
       <View style={styles.headerRow}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Manage Animals</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>
+          Manage Animals {filteredAnimals.length > 0 && `(${filteredAnimals.length})`}
+        </Text>
         <Button 
           title="Add Animal" 
-          onPress={() => setModalVisible(true)}
+          onPress={() => {
+            setEditMode(false);
+            setNewAnimalName('');
+            setNewAnimalDescription('');
+            setModalVisible(true);
+          }}
           style={styles.addButton}
           variant="primary"
         />
       </View>
       
-      <FlatList
-        data={animals}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View style={[styles.itemCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={styles.itemMainInfo}>
-              <Text style={[styles.itemName, { color: colors.text }]}>{item.name}</Text>
-              <View style={styles.sizesContainer}>
-                {item.sizes.map((size, index) => (
-                  <View key={index} style={[styles.sizeTag, { backgroundColor: colors.primary + '20' }]}>
-                    <Text style={[styles.sizeText, { color: colors.primary }]}>{size}</Text>
-                  </View>
-                ))}
+      {loading && !refreshing ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.text }]}>Loading animals...</Text>
+        </View>
+      ) : error ? (
+        <View style={styles.errorContainer}>
+          <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
+          <Button title="Retry" onPress={fetchAnimals} style={styles.retryButton} />
+        </View>
+      ) : (
+        <FlatList
+          data={filteredAnimals}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <View style={[styles.itemCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <TouchableOpacity 
+                style={styles.itemMainInfo}
+                onPress={() => openEditModal(item)}
+              >
+                <Text style={[styles.itemName, { color: colors.text }]}>{item.title}</Text>
+                {item.description && (
+                  <Text style={[styles.itemDescription, { color: colors.lightText }]} numberOfLines={2}>
+                    {item.description}
+                  </Text>
+                )}
+              </TouchableOpacity>
+              <View style={styles.itemActions}>
+                <Text style={{ color: item.is_active ? '#4CAF50' : '#F44336', marginRight: 8 }}>
+                  {item.is_active ? 'Active' : 'Inactive'}
+                </Text>
+                <TouchableOpacity 
+                  style={[styles.actionButton, { backgroundColor: '#2196F3' }]}
+                  onPress={() => openEditModal(item)}
+                >
+                  <Ionicons name="pencil" size={16} color="white" />
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.actionButton, { 
+                    backgroundColor: item.is_active ? '#F44336' : '#4CAF50',
+                    marginLeft: 8
+                  }]}
+                  onPress={() => toggleAnimalStatus(item)}
+                >
+                  <Ionicons name={item.is_active ? 'close' : 'checkmark'} size={16} color="white" />
+                </TouchableOpacity>
               </View>
             </View>
-            <View style={styles.itemActions}>
-              <Text style={{ color: item.active ? '#4CAF50' : '#F44336', marginRight: 8 }}>
-                {item.active ? 'Active' : 'Inactive'}
+          )}
+          contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[colors.primary]}
+              tintColor={colors.primary}
+            />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Ionicons name="alert-circle-outline" size={48} color={colors.lightText} />
+              <Text style={[styles.emptyText, { color: colors.text }]}>
+                No animals found
               </Text>
-              <TouchableOpacity 
-                style={[styles.toggleButton, { backgroundColor: item.active ? '#F44336' : '#4CAF50' }]}
-                onPress={() => toggleAnimalStatus(item.id)}
-              >
-                <Text style={styles.toggleButtonText}>
-                  {item.active ? 'Deactivate' : 'Activate'}
-                </Text>
-              </TouchableOpacity>
+              <Text style={[styles.emptySubtext, { color: colors.lightText }]}>
+                {searchQuery ? 'Try a different search term' : 'Add some animals to get started'}
+              </Text>
             </View>
-          </View>
-        )}
-        contentContainerStyle={styles.listContent}
-      />
+          }
+        />
+      )}
       
-      {/* Modal for adding a new animal */}
+      {/* Modal for adding/editing an animal */}
       <Modal
         animationType="slide"
         transparent={true}
         visible={modalVisible}
-        onRequestClose={() => setModalVisible(false)}
+        onRequestClose={() => {
+          setModalVisible(false);
+          setEditMode(false);
+          setCurrentAnimal(null);
+        }}
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>Add New Animal</Text>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>
+              {editMode ? 'Edit Animal' : 'Add New Animal'}
+            </Text>
             
             <TextInput
               style={[styles.input, { borderColor: colors.border, color: colors.text }]}
@@ -131,50 +389,33 @@ export default function AnimalsTab({ animals, setAnimals }: AnimalsTabProps) {
               onChangeText={setNewAnimalName}
             />
             
-            <Text style={[styles.modalLabel, { color: colors.text }]}>Available Sizes:</Text>
-            
-            <View style={styles.sizesSelectionContainer}>
-              {['Small', 'Medium', 'Large'].map((size) => (
-                <TouchableOpacity
-                  key={size}
-                  style={[
-                    styles.sizeSelectButton,
-                    { 
-                      backgroundColor: selectedSizes.includes(size) ? colors.primary : 'transparent',
-                      borderColor: colors.primary
-                    }
-                  ]}
-                  onPress={() => {
-                    if (selectedSizes.includes(size)) {
-                      setSelectedSizes(selectedSizes.filter(s => s !== size));
-                    } else {
-                      setSelectedSizes([...selectedSizes, size]);
-                    }
-                  }}
-                >
-                  <Text 
-                    style={[
-                      styles.sizeSelectText, 
-                      { color: selectedSizes.includes(size) ? 'white' : colors.primary }
-                    ]}
-                  >
-                    {size}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            <TextInput
+              style={[styles.textArea, { borderColor: colors.border, color: colors.text }]}
+              placeholder="Description (optional)"
+              placeholderTextColor={colors.lightText}
+              value={newAnimalDescription}
+              onChangeText={setNewAnimalDescription}
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+            />
             
             <View style={styles.modalButtons}>
               <Button 
                 title="Cancel" 
-                onPress={() => setModalVisible(false)}
+                onPress={() => {
+                  setModalVisible(false);
+                  setEditMode(false);
+                  setCurrentAnimal(null);
+                }}
                 style={styles.modalButton}
                 variant="outline"
               />
               <Button 
-                title="Add" 
-                onPress={handleAddAnimal}
+                title={editMode ? "Update" : "Add"} 
+                onPress={editMode ? updateAnimal : addAnimal}
                 style={styles.modalButton}
+                disabled={loading}
               />
             </View>
           </View>
@@ -189,6 +430,35 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
   },
+  searchFilterContainer: {
+    flexDirection: 'row',
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  searchContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    height: 40,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    fontSize: 16,
+  },
+  filterButton: {
+    marginLeft: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  filterButtonText: {
+    fontWeight: '500',
+  },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -202,9 +472,49 @@ const styles = StyleSheet.create({
   addButton: {
     height: 40,
     paddingHorizontal: 16,
+    paddingVertical: 8,
+    fontSize: 14,
   },
   listContent: {
     paddingBottom: 20,
+    flexGrow: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorText: {
+    fontSize: 16,
+    marginBottom: 16,
+  },
+  retryButton: {
+    paddingHorizontal: 24,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 40,
+  },
+  emptyText: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginTop: 12,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: 'center',
   },
   itemCard: {
     flexDirection: 'row',
@@ -228,34 +538,19 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 4,
   },
-  sizesContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  sizeTag: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginRight: 6,
-    marginTop: 4,
-  },
-  sizeText: {
-    fontSize: 12,
-    fontWeight: '500',
+  itemDescription: {
+    fontSize: 14,
   },
   itemActions: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  toggleButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  toggleButtonText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '600',
+  actionButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   modalOverlay: {
     flex: 1,
@@ -265,7 +560,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   modalContent: {
-    width: '80%',
+    width: '90%',
     borderRadius: 12,
     padding: 20,
     alignItems: 'center',
@@ -282,12 +577,6 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     textAlign: 'center',
   },
-  modalLabel: {
-    fontSize: 16,
-    fontWeight: '500',
-    alignSelf: 'flex-start',
-    marginBottom: 10,
-  },
   input: {
     width: '100%',
     height: 50,
@@ -297,22 +586,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     fontSize: 16,
   },
-  sizesSelectionContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  textArea: {
     width: '100%',
-    marginBottom: 20,
-  },
-  sizeSelectButton: {
+    height: 100,
     borderWidth: 1,
-    borderRadius: 20,
+    borderRadius: 8,
+    marginBottom: 16,
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginHorizontal: 4,
-  },
-  sizeSelectText: {
-    fontSize: 14,
-    fontWeight: '500',
+    paddingVertical: 8,
+    fontSize: 16,
   },
   modalButtons: {
     flexDirection: 'row',

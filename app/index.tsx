@@ -19,7 +19,9 @@ export default function Index() {
   }
 
   // Redirect based on authentication status
-  if (user) {
+  if (user?.role === 'admin') {
+    return <Redirect href="/(admin-tabs)" />;
+  } else if (user?.role === 'user') {
     return <Redirect href="/(tabs)" />;
   } else {
     return <Redirect href="/sign-in" />;

@@ -120,11 +120,12 @@ export default function OrdersTab({ orders, setSelectedOrder, openStatusModal, o
   // Get status color
   const getStatusColor = (status: string) => {
     switch(status) {
-      case 'Pending': return '#FFA000';
-      case 'Processing': return '#2196F3';
-      case 'Shipped': return '#4CAF50';
-      case 'Delivered': return '#4CAF50';
-      case 'Cancelled': return '#F44336';
+      case 'pending': return '#FFA000';
+      case 'confirmed': return '#2196F3';
+      case 'processing': return '#9C27B0';
+      case 'ready': return '#4CAF50';
+      case 'delivered': return '#4CAF50';
+      case 'cancelled': return '#F44336';
       default: return '#757575';
     }
   };
@@ -210,7 +211,7 @@ export default function OrdersTab({ orders, setSelectedOrder, openStatusModal, o
               </Text>
             </TouchableOpacity>
             
-            {['Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled'].map((status) => (
+            {['pending', 'confirmed', 'processing', 'ready', 'delivered', 'cancelled'].map((status) => (
               <TouchableOpacity
                 key={status}
                 style={[
@@ -225,7 +226,7 @@ export default function OrdersTab({ orders, setSelectedOrder, openStatusModal, o
                   statusFilter === status && styles.activeFilterText,
                   { color: statusFilter === status ? 'white' : colors.text }
                 ]}>
-                  {status}
+                  {status.charAt(0).toUpperCase() + status.slice(1)}
                 </Text>
               </TouchableOpacity>
             ))}

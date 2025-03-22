@@ -22,6 +22,7 @@ import { useColorScheme } from '../hooks/useColorScheme';
 import { Ionicons } from '@expo/vector-icons';
 import { createShadow } from '../utils/styling';
 import { useAuth } from '../lib/auth/AuthContext';
+import { checkIsAdmin } from '@/lib/auth/adminHelpers';
 
 const { width, height } = Dimensions.get('window');
 
@@ -76,6 +77,7 @@ export default function SignInScreen() {
   const [fullNameError, setFullNameError] = useState('');
   const [phoneError, setPhoneError] = useState('');
   const [confirmPasswordError, setConfirmPasswordError] = useState('');
+  const { user } = useAuth();
 
   const validateLoginForm = () => {
     let isValid = true;
@@ -168,8 +170,13 @@ export default function SignInScreen() {
     
     try {
       setIsLoading(true);
-      await signInWithEmail(email, password);
-      router.replace('/(tabs)');
+      await signInWithEmail(email, password);      
+      const isAdmin = await checkIsAdmin(user.id)
+      if (isAdmin) {
+        router.replace('/(admin-tabs)');
+      } else {
+        router.replace('/(tabs)');
+      }
     } catch (error: any) {
       Alert.alert('Sign In Failed', error.message || 'Please check your credentials and try again.');
     } finally {

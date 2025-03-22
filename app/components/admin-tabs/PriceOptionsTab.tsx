@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -10,27 +10,40 @@ import {
   Alert,
   SafeAreaView,
   ScrollView,
-  Switch
+  Switch,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../constants/Colors';
 import { useColorScheme } from '../../../hooks/useColorScheme';
+import { supabase } from '../../../utils/supabase';
 
 interface PriceOption {
   id: string;
-  animalId: string;
-  animalSize: string;
+  animal_size_id: string;
   name: string;
   price: number;
   description: string;
-  isActive: boolean;
+  is_active: boolean;
+  created_at?: string;
+  animal_size_option?: {
+    animal: {
+      id: string;
+      title: string;
+    };
+    size: {
+      id: string;
+      name: string;
+    };
+  };
 }
 
 interface Animal {
   id: string;
   title: string;
   description: string;
-  isActive: boolean;
+  is_active: boolean;
   sizes: string[];
 }
 
@@ -40,9 +53,14 @@ interface PriceOptionsTabProps {
   setPriceOptions: React.Dispatch<React.SetStateAction<PriceOption[]>>;
 }
 
-export default function PriceOptionsTab({ animals, priceOptions, setPriceOptions }: PriceOptionsTabProps) {
+export default function PriceOptionsTab({ animals, priceOptions: initialOptions, setPriceOptions: setParentOptions }: PriceOptionsTabProps) {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme || 'light'];
+  
+  const [priceOptions, setPriceOptions] = useState<PriceOption[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   
   const [modalVisible, setModalVisible] = useState(false);
   const [editingPriceOption, setEditingPriceOption] = useState<PriceOption | null>(null);
@@ -57,6 +75,39 @@ export default function PriceOptionsTab({ animals, priceOptions, setPriceOptions
   // Filter states
   const [animalFilter, setAnimalFilter] = useState<string | null>(null);
   const [sizeFilter, setSizeFilter] = useState<string | null>(null);
+  const [nameFilter, setNameFilter] = useState<string | null>(null);
+  
+  // Fetch price options from Supabase with related data
+  const fetchPriceOptions = async () => {
+    try {
+      setError(null);
+      setLoading(true);
+      
+      const { data, error } = await supabase
+        .from('price_options')
+        .select(`
+          *,
+          animal_size_option:animal_size_options(
+            animal:animals(id, title),
+            size:sizes(id, name)
+          )
+        `)
+        .order('created_at', { ascending: false });
+      
+      if (error) {
+        throw error;
+      }
+      
+      setPriceOptions(data || []);
+      setParentOptions(data || []);
+    } catch (err) {
+      console.error('Error fetching price options:', err);
+      setError('Failed to load price options');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
   
   const resetForm = () => {
     setSelectedAnimal("");
@@ -74,15 +125,15 @@ export default function PriceOptionsTab({ animals, priceOptions, setPriceOptions
   
   const openEditModal = (priceOption: PriceOption) => {
     setEditingPriceOption(priceOption);
-    setSelectedAnimal(priceOption.animalId);
-    setSelectedAnimalSize(priceOption.animalSize);
+    setSelectedAnimal(priceOption.animal_size_option?.animal?.id || "");
+    setSelectedAnimalSize(priceOption.animal_size_option?.size?.id || "");
     setName(priceOption.name);
     setPrice(priceOption.price.toString());
-    setDescription(priceOption.description);
+    setDescription(priceOption.description || "");
     setModalVisible(true);
   };
   
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!selectedAnimal || !selectedAnimalSize || !name || !price) {
       Alert.alert("Error", "Please fill in all required fields.");
       return;
@@ -94,50 +145,96 @@ export default function PriceOptionsTab({ animals, priceOptions, setPriceOptions
       return;
     }
     
-    if (editingPriceOption) {
-      // Update existing price option
-      setPriceOptions(prevOptions => 
-        prevOptions.map(option => 
-          option.id === editingPriceOption.id 
-            ? {
-                ...option,
-                animalId: selectedAnimal,
-                animalSize: selectedAnimalSize,
-                name,
-                price: priceValue,
-                description
-              } 
-            : option
-        )
-      );
-    } else {
-      // Add new price option
-      const newPriceOption: PriceOption = {
-        id: Date.now().toString(),
-        animalId: selectedAnimal,
-        animalSize: selectedAnimalSize,
+    try {
+      setLoading(true);
+      
+      // First, get or create the animal_size_option
+      const { data: animalSizeOption, error: animalSizeError } = await supabase
+        .from('animal_size_options')
+        .select('id')
+        .eq('animal_id', selectedAnimal)
+        .eq('size_id', selectedAnimalSize)
+        .single();
+      
+      if (animalSizeError && animalSizeError.code !== 'PGRST116') {
+        throw animalSizeError;
+      }
+      
+      let animalSizeId = animalSizeOption?.id;
+      
+      if (!animalSizeId) {
+        const { data: newAnimalSize, error: insertError } = await supabase
+          .from('animal_size_options')
+          .insert([{
+            animal_id: selectedAnimal,
+            size_id: selectedAnimalSize,
+            is_active: true
+          }])
+          .select('id')
+          .single();
+        
+        if (insertError) throw insertError;
+        animalSizeId = newAnimalSize.id;
+      }
+      
+      const priceOptionData = {
+        animal_size_id: animalSizeId,
         name,
         price: priceValue,
         description,
-        isActive: true
+        is_active: true
       };
       
-      setPriceOptions(prevOptions => [...prevOptions, newPriceOption]);
+      if (editingPriceOption) {
+        // Update existing price option
+        const { error } = await supabase
+          .from('price_options')
+          .update(priceOptionData)
+          .eq('id', editingPriceOption.id);
+        
+        if (error) throw error;
+        Alert.alert('Success', 'Price option updated successfully');
+      } else {
+        // Add new price option
+        const { error } = await supabase
+          .from('price_options')
+          .insert([priceOptionData]);
+        
+        if (error) throw error;
+        Alert.alert('Success', 'Price option added successfully');
+      }
+      
+      setModalVisible(false);
+      resetForm();
+      fetchPriceOptions();
+    } catch (err) {
+      console.error('Error saving price option:', err);
+      Alert.alert('Error', 'Failed to save price option');
+    } finally {
+      setLoading(false);
     }
-    
-    setModalVisible(false);
-    resetForm();
   };
   
-  const togglePriceOptionStatus = (id: string) => {
-    setPriceOptions(prevOptions => 
-      prevOptions.map(option => 
-        option.id === id ? { ...option, isActive: !option.isActive } : option
-      )
-    );
+  const togglePriceOptionStatus = async (id: string, currentStatus: boolean) => {
+    try {
+      setLoading(true);
+      
+      const { error } = await supabase
+        .from('price_options')
+        .update({ is_active: !currentStatus })
+        .eq('id', id);
+      
+      if (error) throw error;
+      fetchPriceOptions();
+    } catch (err) {
+      console.error('Error toggling price option status:', err);
+      Alert.alert('Error', 'Failed to update price option status');
+    } finally {
+      setLoading(false);
+    }
   };
   
-  const deletePriceOption = (id: string) => {
+  const deletePriceOption = async (id: string) => {
     Alert.alert(
       "Confirm Delete",
       "Are you sure you want to delete this price option?",
@@ -146,32 +243,83 @@ export default function PriceOptionsTab({ animals, priceOptions, setPriceOptions
         { 
           text: "Delete", 
           style: "destructive",
-          onPress: () => {
-            setPriceOptions(prevOptions => prevOptions.filter(option => option.id !== id));
+          onPress: async () => {
+            try {
+              setLoading(true);
+              
+              const { error } = await supabase
+                .from('price_options')
+                .delete()
+                .eq('id', id);
+              
+              if (error) throw error;
+              Alert.alert('Success', 'Price option deleted successfully');
+              fetchPriceOptions();
+            } catch (err) {
+              console.error('Error deleting price option:', err);
+              Alert.alert('Error', 'Failed to delete price option');
+            } finally {
+              setLoading(false);
+            }
           }
         }
       ]
     );
   };
   
-  const getAnimalName = (animalId: string) => {
-    const animal = animals.find(a => a.id === animalId);
-    return animal ? animal.title : "Unknown";
+  const getAnimalName = (priceOption: PriceOption) => {
+    return priceOption.animal_size_option?.animal?.title || "Unknown";
+  };
+  
+  const getSizeName = (priceOption: PriceOption) => {
+    return priceOption.animal_size_option?.size?.name || "Unknown";
+  };
+  
+  // Get unique option names from price options
+  const getUniqueOptionNames = () => {
+    const names = new Set<string>();
+    priceOptions.forEach(option => {
+      if (option.name) {
+        names.add(option.name);
+      }
+    });
+    return Array.from(names).sort();
   };
   
   const filterPriceOptions = () => {
     let filtered = [...priceOptions];
     
     if (animalFilter) {
-      filtered = filtered.filter(option => option.animalId === animalFilter);
+      filtered = filtered.filter(option => 
+        option.animal_size_option?.animal?.id === animalFilter
+      );
     }
     
     if (sizeFilter) {
-      filtered = filtered.filter(option => option.animalSize === sizeFilter);
+      filtered = filtered.filter(option => 
+        option.animal_size_option?.size?.id === sizeFilter
+      );
+    }
+    
+    if (nameFilter) {
+      filtered = filtered.filter(option => 
+        option.name.toLowerCase().includes(nameFilter.toLowerCase())
+      );
     }
     
     return filtered;
   };
+  
+  // Handle refresh
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchPriceOptions();
+  };
+  
+  // Initial data fetch
+  useEffect(() => {
+    fetchPriceOptions();
+  }, []);
   
   const renderPriceOptionItem = ({ item }: { item: PriceOption }) => {
     return (
@@ -180,7 +328,7 @@ export default function PriceOptionsTab({ animals, priceOptions, setPriceOptions
           <View>
             <Text style={[styles.optionName, { color: colors.text }]}>{item.name}</Text>
             <Text style={[styles.optionSubtitle, { color: colors.lightText }]}>
-              {getAnimalName(item.animalId)} - {item.animalSize.charAt(0).toUpperCase() + item.animalSize.slice(1)}
+              {getAnimalName(item)} - {getSizeName(item)}
             </Text>
           </View>
           
@@ -198,11 +346,11 @@ export default function PriceOptionsTab({ animals, priceOptions, setPriceOptions
         <View style={styles.optionActions}>
           <View style={styles.statusContainer}>
             <Text style={[styles.statusLabel, { color: colors.lightText }]}>
-              {item.isActive ? "Active" : "Inactive"}
+              {item.is_active ? "Active" : "Inactive"}
             </Text>
             <Switch
-              value={item.isActive}
-              onValueChange={() => togglePriceOptionStatus(item.id)}
+              value={item.is_active}
+              onValueChange={() => togglePriceOptionStatus(item.id, item.is_active)}
               trackColor={{ false: colors.border, true: colors.primary }}
               thumbColor="#FFFFFF"
             />
@@ -254,43 +402,71 @@ export default function PriceOptionsTab({ animals, priceOptions, setPriceOptions
     </TouchableOpacity>
   );
   
-  const renderSizeFilterItem = ({ item }: { item: string }) => (
+  const renderSizeFilterItem = ({ item }: { item: { id: string; name: string } }) => (
     <TouchableOpacity
       style={[
         styles.filterItem, 
-        sizeFilter === item && styles.activeFilterItem,
+        sizeFilter === item.id && styles.activeFilterItem,
         { 
-          backgroundColor: sizeFilter === item ? colors.primary : colors.card,
+          backgroundColor: sizeFilter === item.id ? colors.primary : colors.card,
           borderColor: colors.border 
         }
       ]}
-      onPress={() => setSizeFilter(sizeFilter === item ? null : item)}
+      onPress={() => setSizeFilter(sizeFilter === item.id ? null : item.id)}
     >
       <Text 
         style={[
           styles.filterText, 
-          { color: sizeFilter === item ? 'white' : colors.text }
+          { color: sizeFilter === item.id ? 'white' : colors.text }
         ]}
       >
-        {item.charAt(0).toUpperCase() + item.slice(1)}
+        {item.name.charAt(0).toUpperCase() + item.name.slice(1)}
       </Text>
     </TouchableOpacity>
   );
   
   // Get unique sizes from all animals
   const getUniqueSizes = () => {
-    const sizes = new Set<string>();
-    animals.forEach(animal => {
-      animal.sizes.forEach(size => sizes.add(size));
+    if (!animalFilter) return [];
+    
+    // Create a map to store unique sizes with their IDs
+    const sizeMap = new Map<string, { id: string; name: string }>();
+    
+    // Get sizes from price options for the selected animal
+    priceOptions.forEach(option => {
+      if (
+        option.animal_size_option?.animal?.id === animalFilter &&
+        option.animal_size_option?.size?.id &&
+        option.animal_size_option?.size?.name
+      ) {
+        sizeMap.set(option.animal_size_option.size.id, {
+          id: option.animal_size_option.size.id,
+          name: option.animal_size_option.size.name
+        });
+      }
     });
-    return Array.from(sizes);
+
+    // If no sizes found in price options, get them from the animals prop
+    if (sizeMap.size === 0) {
+      const selectedAnimal = animals.find(a => a.id === animalFilter);
+      if (selectedAnimal?.sizes) {
+        selectedAnimal.sizes.forEach(size => {
+          if (size) {
+            sizeMap.set(size, { id: size, name: size });
+          }
+        });
+      }
+    }
+
+    // Convert map to array and sort by name
+    return Array.from(sizeMap.values()).sort((a, b) => a.name.localeCompare(b.name));
   };
   
   // Get sizes for selected animal in modal
   const getSelectedAnimalSizes = () => {
     if (!selectedAnimal) return [];
     const animal = animals.find(a => a.id === selectedAnimal);
-    return animal ? animal.sizes : [];
+    return animal?.sizes || [];
   };
   
   return (
@@ -308,7 +484,7 @@ export default function PriceOptionsTab({ animals, priceOptions, setPriceOptions
       <View style={styles.filterSection}>
         <Text style={[styles.filterTitle, { color: colors.text }]}>Filter by Animal:</Text>
         <FlatList
-          data={animals.filter(animal => animal.isActive)}
+          data={animals.filter(animal => animal.is_active)}
           renderItem={renderAnimalFilterItem}
           keyExtractor={item => item.id}
           horizontal
@@ -321,15 +497,48 @@ export default function PriceOptionsTab({ animals, priceOptions, setPriceOptions
         <View style={styles.filterSection}>
           <Text style={[styles.filterTitle, { color: colors.text }]}>Filter by Size:</Text>
           <FlatList
-            data={animals.find(a => a.id === animalFilter)?.sizes || []}
+            data={getUniqueSizes()}
             renderItem={renderSizeFilterItem}
-            keyExtractor={item => item}
+            keyExtractor={item => item.id}
             horizontal
             showsHorizontalScrollIndicator={false}
             style={styles.filterList}
           />
         </View>
       )}
+      
+      <View style={styles.filterSection}>
+        <Text style={[styles.filterTitle, { color: colors.text }]}>Filter by Package Name:</Text>
+        <FlatList
+          data={getUniqueOptionNames()}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={[
+                styles.filterItem, 
+                nameFilter === item && styles.activeFilterItem,
+                { 
+                  backgroundColor: nameFilter === item ? colors.primary : colors.card,
+                  borderColor: colors.border 
+                }
+              ]}
+              onPress={() => setNameFilter(nameFilter === item ? null : item)}
+            >
+              <Text 
+                style={[
+                  styles.filterText, 
+                  { color: nameFilter === item ? 'white' : colors.text }
+                ]}
+              >
+                {item}
+              </Text>
+            </TouchableOpacity>
+          )}
+          keyExtractor={item => item}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.filterList}
+        />
+      </View>
       
       <FlatList
         data={filterPriceOptions()}
@@ -340,9 +549,15 @@ export default function PriceOptionsTab({ animals, priceOptions, setPriceOptions
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={[styles.emptyText, { color: colors.lightText }]}>
-              No price options found. Add your first price option!
+              {loading ? 'Loading price options...' : 'No price options found. Add your first price option!'}
             </Text>
           </View>
+        }
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+          />
         }
       />
       
@@ -368,7 +583,7 @@ export default function PriceOptionsTab({ animals, priceOptions, setPriceOptions
               <Text style={[styles.inputLabel, { color: colors.lightText }]}>Animal Type *</Text>
               <View style={[styles.pickerContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <FlatList
-                  data={animals.filter(animal => animal.isActive)}
+                  data={animals.filter(animal => animal.is_active)}
                   renderItem={({ item }) => (
                     <TouchableOpacity
                       style={[
@@ -400,7 +615,7 @@ export default function PriceOptionsTab({ animals, priceOptions, setPriceOptions
               </View>
               
               {selectedAnimal && (
-                <>
+                <View>
                   <Text style={[styles.inputLabel, { color: colors.lightText }]}>Size *</Text>
                   <View style={[styles.pickerContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
                     <FlatList
@@ -431,7 +646,7 @@ export default function PriceOptionsTab({ animals, priceOptions, setPriceOptions
                       showsHorizontalScrollIndicator={false}
                     />
                   </View>
-                </>
+                </View>
               )}
               
               <Text style={[styles.inputLabel, { color: colors.lightText }]}>Package Name *</Text>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -8,19 +8,24 @@ import {
   Modal,
   Alert,
   TextInput,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { Colors } from '../../../constants/Colors';
 import { useColorScheme } from '../../../hooks/useColorScheme';
 import Button from '../../../components/Button';
-import { format, parseISO, isValid } from 'date-fns';
+import { format, parseISO, isValid, startOfDay, isFuture, isPast, isToday } from 'date-fns';
 import { Calendar, DateData } from 'react-native-calendars';
+import { supabase } from '../../../utils/supabase';
+import { Ionicons } from '@expo/vector-icons';
 
 interface DeliveryDate {
   id: string;
   date: string;
-  slots: number;
-  booked: number;
-  active: boolean;
+  available_slots: number;
+  is_active: boolean;
+  created_at?: string;
+  booked_count?: number;
 }
 
 interface DatesTabProps {
@@ -28,17 +33,92 @@ interface DatesTabProps {
   setDeliveryDates: React.Dispatch<React.SetStateAction<DeliveryDate[]>>;
 }
 
-export default function DatesTab({ deliveryDates, setDeliveryDates }: DatesTabProps) {
+export default function DatesTab({ deliveryDates: initialDates, setDeliveryDates: setParentDates }: DatesTabProps) {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme || 'light'];
+  
+  const [deliveryDates, setDeliveryDates] = useState<DeliveryDate[]>([]);
+  const [filteredDates, setFilteredDates] = useState<DeliveryDate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  
+  const [dateFilter, setDateFilter] = useState<'all' | 'upcoming' | 'past'>('upcoming');
   
   const [dateModal, setDateModal] = useState(false);
   const [calendarVisible, setCalendarVisible] = useState(false);
   const [newDate, setNewDate] = useState<string | null>(null);
   const [newSlots, setNewSlots] = useState('');
   
-  // Function to add a new delivery date
-  const handleAddDate = () => {
+  const [editMode, setEditMode] = useState(false);
+  const [currentDate, setCurrentDate] = useState<DeliveryDate | null>(null);
+  
+  // Fetch delivery dates from Supabase
+  const fetchDeliveryDates = async () => {
+    try {
+      setError(null);
+      setLoading(true);
+      
+      const { data, error } = await supabase
+        .from('delivery_dates')
+        .select(`
+          id,
+          date,
+          available_slots,
+          is_active,
+          created_at,
+          booked_count:orders(count)
+        `)
+        .order('date', { ascending: true });
+      
+      if (error) {
+        throw error;
+      }
+      
+      // Transform the data to match our component's expectations
+      const transformedData = (data || []).map(date => ({
+        id: date.id,
+        date: date.date,
+        available_slots: date.available_slots,
+        is_active: date.is_active,
+        created_at: date.created_at,
+        booked_count: date.booked_count?.[0]?.count || 0
+      }));
+      
+      setDeliveryDates(transformedData);
+      setParentDates(transformedData);
+      applyFilters(transformedData, dateFilter);
+    } catch (err) {
+      console.error('Error fetching delivery dates:', err);
+      setError('Failed to load delivery dates');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+  
+  // Apply filters to the dates list
+  const applyFilters = (datesList: DeliveryDate[], filter: 'all' | 'upcoming' | 'past') => {
+    let filtered = [...datesList];
+    
+    // Apply date filter
+    if (filter === 'upcoming') {
+      filtered = filtered.filter(date => {
+        const dateObj = parseISO(date.date);
+        return isToday(dateObj) || isFuture(dateObj);
+      });
+    } else if (filter === 'past') {
+      filtered = filtered.filter(date => {
+        const dateObj = parseISO(date.date);
+        return isPast(dateObj) && !isToday(dateObj);
+      });
+    }
+    
+    setFilteredDates(filtered);
+  };
+  
+  // Add a new delivery date
+  const addDeliveryDate = async () => {
     if (!newDate) {
       Alert.alert('Error', 'Please select a date');
       return;
@@ -49,34 +129,135 @@ export default function DatesTab({ deliveryDates, setDeliveryDates }: DatesTabPr
       return;
     }
     
+    // Check if date already exists
     const dateExists = deliveryDates.some(date => date.date === newDate);
+    if (dateExists) {
+      Alert.alert('Error', 'This date already exists in the schedule');
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      
+      const newDeliveryDate = {
+        date: newDate,
+        available_slots: Number(newSlots),
+        is_active: true
+      };
+      
+      const { data, error } = await supabase
+        .from('delivery_dates')
+        .insert([newDeliveryDate])
+        .select();
+      
+      if (error) {
+        throw error;
+      }
+      
+      Alert.alert('Success', 'Delivery date added successfully');
+      setNewDate(null);
+      setNewSlots('');
+      setDateModal(false);
+      
+      // Refresh the dates list
+      fetchDeliveryDates();
+    } catch (err) {
+      console.error('Error adding delivery date:', err);
+      Alert.alert('Error', 'Failed to add delivery date');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Update an existing delivery date
+  const updateDeliveryDate = async () => {
+    if (!currentDate) return;
+    
+    if (!newDate) {
+      Alert.alert('Error', 'Please select a date');
+      return;
+    }
+    
+    if (!newSlots || isNaN(Number(newSlots)) || Number(newSlots) <= 0) {
+      Alert.alert('Error', 'Please enter a valid number of slots');
+      return;
+    }
+    
+    // Check if date already exists (except for the current one)
+    const dateExists = deliveryDates.some(date => 
+      date.date === newDate && date.id !== currentDate.id
+    );
     
     if (dateExists) {
       Alert.alert('Error', 'This date already exists in the schedule');
       return;
     }
     
-    const newDeliveryDate: DeliveryDate = {
-      id: (deliveryDates.length + 1).toString(),
-      date: newDate,
-      slots: Number(newSlots),
-      booked: 0,
-      active: true
-    };
-    
-    setDeliveryDates([...deliveryDates, newDeliveryDate]);
-    setNewDate(null);
-    setNewSlots('');
-    setDateModal(false);
+    try {
+      setLoading(true);
+      
+      const updatedDate = {
+        date: newDate,
+        available_slots: Number(newSlots)
+      };
+      
+      const { error } = await supabase
+        .from('delivery_dates')
+        .update(updatedDate)
+        .eq('id', currentDate.id);
+      
+      if (error) {
+        throw error;
+      }
+      
+      Alert.alert('Success', 'Delivery date updated successfully');
+      setNewDate(null);
+      setNewSlots('');
+      setDateModal(false);
+      setEditMode(false);
+      setCurrentDate(null);
+      
+      // Refresh the dates list
+      fetchDeliveryDates();
+    } catch (err) {
+      console.error('Error updating delivery date:', err);
+      Alert.alert('Error', 'Failed to update delivery date');
+    } finally {
+      setLoading(false);
+    }
   };
   
-  // Function to toggle date active status
-  const toggleDateStatus = (id: string) => {
-    setDeliveryDates(
-      deliveryDates.map(date => 
-        date.id === id ? { ...date, active: !date.active } : date
-      )
-    );
+  // Toggle delivery date active status
+  const toggleDateStatus = async (date: DeliveryDate) => {
+    try {
+      setLoading(true);
+      
+      const { error } = await supabase
+        .from('delivery_dates')
+        .update({ is_active: !date.is_active })
+        .eq('id', date.id);
+      
+      if (error) {
+        throw error;
+      }
+      
+      // Refresh the dates list
+      fetchDeliveryDates();
+    } catch (err) {
+      console.error('Error toggling delivery date status:', err);
+      Alert.alert('Error', 'Failed to update delivery date status');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Open edit modal
+  const openEditModal = (date: DeliveryDate) => {
+    setCurrentDate(date);
+    setNewDate(date.date);
+    setNewSlots(date.available_slots.toString());
+    setEditMode(true);
+    setDateModal(true);
   };
   
   // Format a date string for display
@@ -96,9 +277,14 @@ export default function DatesTab({ deliveryDates, setDeliveryDates }: DatesTabPr
     setCalendarVisible(false);
   };
   
-  // Calculate available slots
+  // Get available slots (subtracting booked orders)
   const getAvailableSlots = (date: DeliveryDate) => {
-    return date.slots - date.booked;
+    return date.available_slots;
+  };
+  
+  // Get booked slots count
+  const getBookedSlots = (date: DeliveryDate) => {
+    return date.booked_count || 0;
   };
   
   // Get marked dates for calendar
@@ -109,7 +295,7 @@ export default function DatesTab({ deliveryDates, setDeliveryDates }: DatesTabPr
     deliveryDates.forEach(date => {
       markedDates[date.date] = { 
         marked: true, 
-        dotColor: date.active ? '#4CAF50' : '#F44336' 
+        dotColor: date.is_active ? '#4CAF50' : '#F44336' 
       };
     });
     
@@ -125,67 +311,181 @@ export default function DatesTab({ deliveryDates, setDeliveryDates }: DatesTabPr
     return markedDates;
   };
   
+  // Handle refresh
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchDeliveryDates();
+  };
+  
+  // Initial data fetch
+  useEffect(() => {
+    fetchDeliveryDates();
+  }, []);
+  
+  // Apply filters when filter changes
+  useEffect(() => {
+    applyFilters(deliveryDates, dateFilter);
+  }, [dateFilter, deliveryDates]);
+  
   return (
     <View style={styles.tabContent}>
+      <View style={styles.filterContainer}>
+        <TouchableOpacity
+          style={[
+            styles.filterButton,
+            dateFilter === 'all' && { backgroundColor: colors.primary + '20' }
+          ]}
+          onPress={() => setDateFilter('all')}
+        >
+          <Text style={[
+            styles.filterButtonText,
+            dateFilter === 'all' && { color: colors.primary }
+          ]}>
+            All Dates
+          </Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={[
+            styles.filterButton,
+            dateFilter === 'upcoming' && { backgroundColor: colors.primary + '20' }
+          ]}
+          onPress={() => setDateFilter('upcoming')}
+        >
+          <Text style={[
+            styles.filterButtonText,
+            dateFilter === 'upcoming' && { color: colors.primary }
+          ]}>
+            Upcoming
+          </Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={[
+            styles.filterButton,
+            dateFilter === 'past' && { backgroundColor: colors.primary + '20' }
+          ]}
+          onPress={() => setDateFilter('past')}
+        >
+          <Text style={[
+            styles.filterButtonText,
+            dateFilter === 'past' && { color: colors.primary }
+          ]}>
+            Past
+          </Text>
+        </TouchableOpacity>
+      </View>
+      
       <View style={styles.headerRow}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Delivery Schedule</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>
+          Delivery Schedule {filteredDates.length > 0 && `(${filteredDates.length})`}
+        </Text>
         <Button 
           title="Add Date" 
-          onPress={() => setDateModal(true)}
+          onPress={() => {
+            setEditMode(false);
+            setNewDate(null);
+            setNewSlots('');
+            setDateModal(true);
+          }}
           style={styles.addButton}
           variant="primary"
         />
       </View>
       
-      <FlatList
-        data={deliveryDates}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View style={[styles.dateCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={styles.dateInfo}>
-              <Text style={[styles.dateText, { color: colors.text }]}>{formatDate(item.date)}</Text>
-              <View style={styles.slotsInfo}>
-                <Text style={[styles.slotsText, { color: colors.lightText }]}>
-                  {getAvailableSlots(item)} available / {item.slots} total
-                </Text>
-                <Text style={[styles.statusText, { color: item.active ? '#4CAF50' : '#F44336' }]}>
-                  {item.active ? 'Active' : 'Inactive'}
-                </Text>
-              </View>
-            </View>
+      {loading && !refreshing ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.text }]}>Loading delivery dates...</Text>
+        </View>
+      ) : error ? (
+        <View style={styles.errorContainer}>
+          <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
+          <Button title="Retry" onPress={fetchDeliveryDates} style={styles.retryButton} />
+        </View>
+      ) : (
+        <FlatList
+          data={filteredDates}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
             <TouchableOpacity 
-              style={[styles.toggleButton, { backgroundColor: item.active ? '#F44336' : '#4CAF50' }]}
-              onPress={() => toggleDateStatus(item.id)}
+              style={[styles.dateCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+              onPress={() => openEditModal(item)}
+              activeOpacity={0.7}
             >
-              <Text style={styles.toggleButtonText}>
-                {item.active ? 'Deactivate' : 'Activate'}
-              </Text>
+              <View style={styles.dateInfo}>
+                <Text style={[styles.dateText, { color: colors.text }]}>{formatDate(item.date)}</Text>
+                <View style={styles.slotsInfo}>
+                  <Text style={[styles.slotsText, { color: colors.lightText }]}>
+                    {getAvailableSlots(item)} available / {getBookedSlots(item)} booked
+                  </Text>
+                  <Text style={[styles.statusText, { color: item.is_active ? '#4CAF50' : '#F44336' }]}>
+                    {item.is_active ? 'Active' : 'Inactive'}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.actionButtons}>
+                <TouchableOpacity 
+                  style={[styles.actionButton, { backgroundColor: '#2196F3' }]}
+                  onPress={() => openEditModal(item)}
+                >
+                  <Ionicons name="pencil" size={16} color="white" />
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.actionButton, { 
+                    backgroundColor: item.is_active ? '#F44336' : '#4CAF50',
+                    marginLeft: 8
+                  }]}
+                  onPress={() => toggleDateStatus(item)}
+                >
+                  <Ionicons name={item.is_active ? 'close' : 'checkmark'} size={16} color="white" />
+                </TouchableOpacity>
+              </View>
             </TouchableOpacity>
-          </View>
-        )}
-        contentContainerStyle={styles.listContent}
-        ListEmptyComponent={
-          <View style={styles.emptyStateContainer}>
-            <Text style={[styles.emptyStateText, { color: colors.lightText }]}>
-              No delivery dates scheduled
-            </Text>
-            <Text style={[styles.emptyStateSubtext, { color: colors.lightText }]}>
-              Add dates to create a delivery schedule
-            </Text>
-          </View>
-        }
-      />
+          )}
+          contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[colors.primary]}
+              tintColor={colors.primary}
+            />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Ionicons name="calendar-outline" size={48} color={colors.lightText} />
+              <Text style={[styles.emptyText, { color: colors.text }]}>
+                No delivery dates found
+              </Text>
+              <Text style={[styles.emptySubtext, { color: colors.lightText }]}>
+                {dateFilter !== 'all' 
+                  ? `No ${dateFilter} dates found. Try another filter.` 
+                  : 'Add dates to create a delivery schedule'}
+              </Text>
+            </View>
+          }
+        />
+      )}
       
-      {/* Modal for adding a new delivery date */}
+      {/* Modal for adding/editing a delivery date */}
       <Modal
         animationType="slide"
         transparent={true}
         visible={dateModal}
-        onRequestClose={() => setDateModal(false)}
+        onRequestClose={() => {
+          setDateModal(false);
+          setEditMode(false);
+          setCurrentDate(null);
+          setNewDate(null);
+          setNewSlots('');
+        }}
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>Add Delivery Date</Text>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>
+              {editMode ? 'Edit Delivery Date' : 'Add Delivery Date'}
+            </Text>
             
             <TouchableOpacity
               style={[styles.dateSelector, { borderColor: colors.border }]}
@@ -210,6 +510,8 @@ export default function DatesTab({ deliveryDates, setDeliveryDates }: DatesTabPr
                 title="Cancel" 
                 onPress={() => {
                   setDateModal(false);
+                  setEditMode(false);
+                  setCurrentDate(null);
                   setNewDate(null);
                   setNewSlots('');
                 }}
@@ -217,9 +519,10 @@ export default function DatesTab({ deliveryDates, setDeliveryDates }: DatesTabPr
                 variant="outline"
               />
               <Button 
-                title="Add" 
-                onPress={handleAddDate}
+                title={editMode ? "Update" : "Add"} 
+                onPress={editMode ? updateDeliveryDate : addDeliveryDate}
                 style={styles.modalButton}
+                disabled={loading}
               />
             </View>
           </View>
@@ -245,24 +548,19 @@ export default function DatesTab({ deliveryDates, setDeliveryDates }: DatesTabPr
             <Calendar
               onDayPress={handleDateSelect}
               markedDates={getMarkedDates()}
-              minDate={new Date().toISOString().split('T')[0]}
+              minDate={!editMode ? new Date().toISOString().split('T')[0] : undefined}
               theme={{
                 calendarBackground: colors.card,
                 textSectionTitleColor: colors.text,
-                dayTextColor: colors.text,
+                selectedDayBackgroundColor: colors.primary,
+                selectedDayTextColor: '#ffffff',
                 todayTextColor: colors.primary,
-                selectedDayTextColor: 'white',
-                monthTextColor: colors.text,
+                dayTextColor: colors.text,
                 textDisabledColor: colors.lightText,
+                dotColor: colors.primary,
                 arrowColor: colors.primary,
+                monthTextColor: colors.text,
               }}
-            />
-            
-            <Button 
-              title="Cancel" 
-              onPress={() => setCalendarVisible(false)}
-              style={styles.calendarButton}
-              variant="outline"
             />
           </View>
         </View>
@@ -275,6 +573,19 @@ const styles = StyleSheet.create({
   tabContent: {
     flex: 1,
     padding: 16,
+  },
+  filterContainer: {
+    flexDirection: 'row',
+    marginBottom: 16,
+  },
+  filterButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginRight: 8,
+  },
+  filterButtonText: {
+    fontWeight: '500',
   },
   headerRow: {
     flexDirection: 'row',
@@ -289,9 +600,48 @@ const styles = StyleSheet.create({
   addButton: {
     height: 40,
     paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorText: {
+    fontSize: 16,
+    marginBottom: 16,
+  },
+  retryButton: {
+    paddingHorizontal: 24,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 40,
+  },
+  emptyText: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginTop: 12,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: 'center',
   },
   listContent: {
     paddingBottom: 20,
+    flexGrow: 1,
   },
   dateCard: {
     flexDirection: 'row',
@@ -317,39 +667,26 @@ const styles = StyleSheet.create({
   },
   slotsInfo: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
   },
   slotsText: {
     fontSize: 14,
+    marginRight: 8,
   },
   statusText: {
     fontSize: 14,
     fontWeight: '500',
   },
-  toggleButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-    marginLeft: 10,
-  },
-  toggleButtonText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  emptyStateContainer: {
+  actionButtons: {
+    flexDirection: 'row',
     alignItems: 'center',
+  },
+  actionButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     justifyContent: 'center',
-    paddingVertical: 40,
-  },
-  emptyStateText: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  emptyStateSubtext: {
-    fontSize: 14,
+    alignItems: 'center',
   },
   modalOverlay: {
     flex: 1,
@@ -359,47 +696,22 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   modalContent: {
-    width: '80%',
-    borderRadius: 12,
-    padding: 20,
-    alignItems: 'center',
-    backgroundColor: 'white',
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-  calendarModal: {
     width: '90%',
     borderRadius: 12,
     padding: 20,
+    alignItems: 'center',
     backgroundColor: 'white',
     elevation: 5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
-  },
-  calendarHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '600',
     marginBottom: 20,
     textAlign: 'center',
-  },
-  calendarTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  closeButton: {
-    fontSize: 16,
-    fontWeight: '500',
   },
   dateSelector: {
     width: '100%',
@@ -431,7 +743,45 @@ const styles = StyleSheet.create({
     flex: 1,
     marginHorizontal: 5,
   },
-  calendarButton: {
-    marginTop: 16,
+  calendarModal: {
+    width: '90%',
+    borderRadius: 12,
+    padding: 10,
+    backgroundColor: 'white',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 10,
+  },
+  calendarTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  closeButton: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  emptyStateContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 40,
+  },
+  emptyStateText: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginTop: 12,
+  },
+  emptyStateSubtext: {
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: 'center',
   },
 }); 
