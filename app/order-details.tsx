@@ -43,6 +43,7 @@ interface OrderDetails {
   email: string;
   isValidZip: boolean;
   notes: string;
+  divided: string;
 }
 
 interface Profile {
@@ -170,6 +171,7 @@ export default function OrderDetailsScreen() {
     email: user?.email || '',
     isValidZip: false,
     notes: '',
+    divided: 'No',
   });
 
   // Update order details when profile is loaded
@@ -334,7 +336,8 @@ export default function OrderDetailsScreen() {
           payment_status: 'unpaid',
           special_instructions: orderDetails.notes || null,
           organs: params.selectedOrgans ? (typeof params.selectedOrgans === 'string' ? params.selectedOrgans.split(', ') : []) : null,
-          extras: selectedExtras ? selectedExtras.map(extra => extra.id) : null
+          extras: selectedExtras ? selectedExtras.map(extra => extra.id) : null,
+          divided: orderDetails.divided
         })
         .select()
         .single();
@@ -522,6 +525,39 @@ export default function OrderDetailsScreen() {
               </TouchableOpacity>
             ))}
           </ScrollView>
+              
+          <View style={styles.divideContainer}>
+              <Text style={[styles.divideLabel, { color: colors.text }]}>Would you like the animal divided in two?</Text>
+              <View style={styles.divideButtonsContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.divideButton,
+                    { borderColor: colors.border },
+                    orderDetails.divided === 'Yes' && { backgroundColor: colors.primary }
+                  ]}
+                  onPress={() => setOrderDetails(prev => ({ ...prev, divided: 'Yes' }))}
+                >
+                  <Text style={[
+                    styles.divideButtonText,
+                    { color: orderDetails.divided === 'Yes' ? 'white' : colors.text }
+                  ]}>Yes</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.divideButton,
+                    { borderColor: colors.border },
+                    orderDetails.divided === 'No' && { backgroundColor: colors.primary }
+                  ]}
+                  onPress={() => setOrderDetails(prev => ({ ...prev, divided: 'No' }))}
+                >
+                  <Text style={[
+                    styles.divideButtonText,
+                    { color: orderDetails.divided === 'No' ? 'white' : colors.text }
+                  ]}>No</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+            
         </View>
 
         {/* Customer Details Section */}
@@ -572,7 +608,7 @@ export default function OrderDetailsScreen() {
               keyboardType="numeric"
               maxLength={5}
             />
-            
+        
             <TextInput
               style={[styles.input, styles.addressInput, { backgroundColor: colors.card, color: colors.text }]}
               placeholder="Street Address"
@@ -808,6 +844,31 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     marginLeft: 8,
+  },
+  divideContainer: {
+    marginBottom: 16,
+  },
+  divideLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 12,
+  },
+  divideButtonsContainer: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  divideButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  divideButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
 }); 
 
