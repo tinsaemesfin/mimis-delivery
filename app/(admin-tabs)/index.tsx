@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import {
-  StyleSheet,
+import { 
+  StyleSheet, 
   SafeAreaView,
-  View,
-  Text,
+  View, 
+  Text, 
   ScrollView,
-  TouchableOpacity,
+  TouchableOpacity, 
   FlatList,
   TextInput,
   Alert,
@@ -40,6 +40,17 @@ interface Order {
   created_at?: string;
   user_id?: string;
   order_ticket?: string;
+  special_instructions?: string;
+  organs?: string[];
+  extras?: {
+    id: string;
+    title: string;
+    price: number;
+  }[];
+  price_option?: {
+    name: string;
+    price: number;
+  };
 }
 
 export default function AdminOrdersScreen() {
@@ -110,24 +121,58 @@ export default function AdminOrdersScreen() {
       if (error) {
         throw error;
       }
+
+      // Fetch extras for orders that have them
+      const ordersWithExtras = await Promise.all(
+        data.map(async (order) => {
+          if (order.extras && order.extras.length > 0) {
+            const { data: extrasData, error: extrasError } = await supabase
+              .from('extras')
+              .select('id, title, price')
+              .in('id', order.extras);
+
+            if (extrasError) {
+              console.error('Error fetching extras:', extrasError);
+              return order;
+            }
+
+            return {
+              ...order,
+              extras: extrasData
+            };
+          }
+          return order;
+        })
+      );
       
       // Transform data to match our Order interface
-      const formattedOrders: Order[] = data.map(order => ({
-        id: order.id,
-        customerName: order.customer_name || 'Unknown',
-        date: order.created_at,
-        status: order.status || 'Pending',
-        total: order.price_option?.price || 0,
-        animalType: order.animal_size_option?.animal?.title || 'Not specified',
-        size: order.animal_size_option?.size?.name || 'Not specified',
-        cutStyle: order.cutting_style?.title || 'Not specified',
-        divided: order.is_divided ? 'Yes' : 'No',
-        phoneNumber: order.phone_number || '',
-        address: order.address || '',
-        user_id: order.user_id,
-        order_ticket: order.order_ticket,
-        created_at: order.created_at
-      }));
+      const formattedOrders: Order[] = ordersWithExtras.map(order => {
+        // Calculate total including extras
+        const basePrice = order.price_option?.price || 0;
+        const extrasTotal = order.extras?.reduce((sum: number, extra: { price: number }) => sum + extra.price, 0) || 0;
+        const total = basePrice + extrasTotal;
+
+        return {
+          id: order.id,
+          customerName: order.customer_name || 'Unknown',
+          date: order.created_at,
+          status: order.status || 'Pending',
+          total: total,
+          animalType: order.animal_size_option?.animal?.title || 'Not specified',
+          size: order.animal_size_option?.size?.name || 'Not specified',
+          cutStyle: order.cutting_style?.title || 'Not specified',
+          divided: order.divided ? 'Yes' : 'No',
+          phoneNumber: order.phone_number || '',
+          address: order.address || '',
+          user_id: order.user_id,
+          order_ticket: order.order_ticket,
+          created_at: order.created_at,
+          special_instructions: order.special_instructions,
+          organs: order.organs,
+          extras: order.extras,
+          price_option: order.price_option
+        };
+      });
       
       setOrders(formattedOrders);
       setFilteredOrders(formattedOrders);
@@ -245,8 +290,8 @@ export default function AdminOrdersScreen() {
           openStatusModal={openStatusModal}
           onExport={handleExportOrders}
         />
-      </View>
-      
+          </View>
+
       {/* Order Status Modal */}
       <Modal
         animationType="slide"
@@ -261,7 +306,7 @@ export default function AdminOrdersScreen() {
             {selectedOrder && (
               <Text style={[styles.orderInfo, { color: colors.lightText }]}>
                 Order #{selectedOrder.order_ticket} - {selectedOrder.customerName}
-              </Text>
+            </Text>
             )}
             
             <View style={styles.statusButtons}>
@@ -278,14 +323,14 @@ export default function AdminOrdersScreen() {
                 </TouchableOpacity>
               ))}
             </View>
-            
-            <TouchableOpacity
+
+        <TouchableOpacity
               style={[styles.closeButton, { backgroundColor: '#000', marginTop: 40, width: '50%' }]}
               onPress={() => setStatusModalVisible(false)}
             >
               <Text style={styles.closeButtonText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
+        </TouchableOpacity>
+      </View>
         </View>
       </Modal>
     </SafeAreaView>

@@ -169,11 +169,23 @@ export default function ProfileScreen() {
     </TouchableOpacity>
   );
 
-  if (!user || isLoading) {
+  if (!user) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <StatusBar barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'} />
+        <View style={styles.guestContainer}>
+          <Text style={[styles.guestTitle, { color: colors.text }]}>Guest User</Text>
+          <Text style={[styles.guestMessage, { color: colors.lightText }]}>
+            Sign in to access your profile and order history
+          </Text>
+          <TouchableOpacity
+            style={[styles.signInButton, { backgroundColor: colors.primary }]}
+            onPress={() => router.replace('/sign-in')}
+          >
+            <Text style={styles.signInButtonText}>Sign In</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
     );
   }
 
@@ -568,6 +580,32 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   updateButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  guestContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  guestTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 12,
+  },
+  guestMessage: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  signInButton: {
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  signInButtonText: {
     color: 'white',
     fontSize: 16,
     fontWeight: '600',

@@ -37,6 +37,17 @@ interface Order {
   created_at?: string;
   user_id?: string;
   order_ticket?: string;
+  special_instructions?: string;
+  organs?: string[];
+  extras?: {
+    id: string;
+    title: string;
+    price: number;
+  }[];
+  price_option?: {
+    name: string;
+    price: number;
+  };
 }
 
 interface OrdersTabProps {
@@ -559,14 +570,61 @@ export default function OrdersTab({ orders, setSelectedOrder, openStatusModal, o
                         </View>
                       </View>
 
+                      {selectedOrderDetails.organs && selectedOrderDetails.organs.length > 0 && (
+                        <View style={styles.detailRow}>
+                          <View style={styles.detailItem}>
+                            <Ionicons name="heart-outline" size={20} color={colors.primary} />
+                            <View style={styles.detailTextContainer}>
+                              <Text style={[styles.detailLabel, { color: colors.lightText }]}>Selected Organs</Text>
+                              <Text style={[styles.detailValue, { color: colors.text }]}>
+                                {selectedOrderDetails.organs.join(', ')}
+                              </Text>
+                            </View>
+                          </View>
+                        </View>
+                      )}
+
+                      <View style={styles.detailRow}>
+                        <View style={styles.detailItem}>
+                          <Ionicons name="cash-outline" size={20} color={colors.primary} />
+                          <View style={styles.detailTextContainer}>
+                            <Text style={[styles.detailLabel, { color: colors.lightText }]}>Base Price</Text>
+                            <Text style={[styles.detailValue, { color: colors.text }]}>
+                              {formatCurrency(selectedOrderDetails.price_option?.price || 0)}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+
+                      {selectedOrderDetails.extras && selectedOrderDetails.extras.length > 0 && (
+                        <View style={styles.detailRow}>
+                          <View style={styles.detailItem}>
+                            <Ionicons name="add-circle-outline" size={20} color={colors.primary} />
+                            <View style={styles.detailTextContainer}>
+                              <Text style={[styles.detailLabel, { color: colors.lightText }]}>Additional Services</Text>
+                              <View style={styles.extrasContainer}>
+                                {selectedOrderDetails.extras.map((extra, index) => (
+                                  <View key={extra.id} style={styles.extraItem}>
+                                    <Text style={[styles.extraTitle, { color: colors.text }]}>{extra.title}</Text>
+                                    <Text style={[styles.extraPrice, { color: colors.text }]}>${extra.price.toFixed(2)}</Text>
+                                  </View>
+                                ))}
+                              </View>
+                            </View>
+                          </View>
+                        </View>
+                      )}
+
                       <View style={styles.detailRow}>
                         <View style={styles.detailItem}>
                           <Ionicons name="cash-outline" size={20} color={colors.primary} />
                           <View style={styles.detailTextContainer}>
                             <Text style={[styles.detailLabel, { color: colors.lightText }]}>Total Amount</Text>
-                            <Text style={[styles.detailValue, { color: colors.text, fontWeight: 'bold' }]}>
-                              {formatCurrency(selectedOrderDetails.total)}
-                            </Text>
+                            <View style={[styles.totalAmountContainer, { backgroundColor: colors.primary + '10' }]}>
+                              <Text style={[styles.totalAmount, { color: 'black' }]}>
+                                {formatCurrency(selectedOrderDetails.total)}
+                              </Text>
+                            </View>
                           </View>
                         </View>
                       </View>
@@ -940,5 +998,52 @@ const styles = StyleSheet.create({
   } as ViewStyle,
   disabledSelector: {
     opacity: 0.7,
+  },
+  pricingSection: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(0,0,0,0.1)',
+  },
+  pricingTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    marginVertical: 8,
+  },
+  extrasContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  extraItem: {
+    padding: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
+    borderRadius: 4,
+  },
+  extraTitle: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  extraPrice: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  totalAmountContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginTop: 4,
+    alignSelf: 'flex-start',
+  },
+  totalAmount: {
+    fontSize: 24,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
 }); 

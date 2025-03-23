@@ -332,11 +332,13 @@ export default function OrderDetailsScreen() {
           order_ticket: orderTicket,
           status: 'pending',
           payment_status: 'unpaid',
-          notes: orderDetails.notes || null
+          special_instructions: orderDetails.notes || null,
+          organs: params.selectedOrgans ? (typeof params.selectedOrgans === 'string' ? params.selectedOrgans.split(', ') : []) : null,
+          extras: selectedExtras ? selectedExtras.map(extra => extra.id) : null
         })
         .select()
         .single();
-
+// TODO: update the price from admin side
       if (orderError) {
         console.error('Error creating order:', orderError);
         Alert.alert('Error', 'Failed to create order. Please try again.');
@@ -815,17 +817,10 @@ const styles = StyleSheet.create({
 // we sell only full lamb and sheep and goat the admin should be able to add animal type
 // admin export the data in excel file
 
-// if you want to track delivery please register.
-// allow people to divide the lamb
 
 
 
 
-// Comments on MArch 05
-// after selecting size to be able to select price 
-// for each size different kind of price
 
+//TODO: roadwarrior integration  and notes 
 
-// yemifelgetun organs endimertu masederegu
-// roadwarrior integration  and notes 
-// 70 miles radius on gthe adress check box 

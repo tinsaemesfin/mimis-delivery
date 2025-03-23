@@ -64,6 +64,12 @@ interface Order {
     date: string;
     available_slots: number;
   };
+  organs?: string[];
+  extras?: {
+    id: string;
+    title: string;
+    price: number;
+  }[];
 }
 
 export default function OrdersScreen() {
@@ -114,7 +120,7 @@ export default function OrdersScreen() {
       setLoading(true);
       setError(null);
 
-      const { data, error: fetchError } = await supabase
+      const { data: ordersData, error: fetchError } = await supabase
         .from('orders')
         .select(`
           *,
@@ -149,8 +155,31 @@ export default function OrdersScreen() {
         throw fetchError;
       }
 
-      setOrders(data || []);
-      setFilteredOrders(data || []);
+      // Fetch extras for orders that have them
+      const ordersWithExtras = await Promise.all(
+        (ordersData || []).map(async (order) => {
+          if (order.extras && order.extras.length > 0) {
+            const { data: extrasData, error: extrasError } = await supabase
+              .from('extras')
+              .select('id, title, price')
+              .in('id', order.extras);
+
+            if (extrasError) {
+              console.error('Error fetching extras:', extrasError);
+              return order;
+            }
+
+            return {
+              ...order,
+              extras: extrasData
+            };
+          }
+          return order;
+        })
+      );
+
+      setOrders(ordersWithExtras || []);
+      setFilteredOrders(ordersWithExtras || []);
     } catch (err) {
       console.error('Error fetching orders:', err);
       setError('Failed to load orders');
@@ -169,7 +198,7 @@ export default function OrdersScreen() {
       setLoading(true);
       setError(null);
 
-      const { data, error: fetchError } = await supabase
+      const { data: orderData, error: fetchError } = await supabase
         .from('orders')
         .select(`
           *,
@@ -204,9 +233,23 @@ export default function OrdersScreen() {
         throw fetchError;
       }
 
-      if (data) {
-        setOrders([data]);
-        setFilteredOrders([data]);
+      if (orderData) {
+        // Fetch extras if the order has them
+        if (orderData.extras && orderData.extras.length > 0) {
+          const { data: extrasData, error: extrasError } = await supabase
+            .from('extras')
+            .select('id, title, price')
+            .in('id', orderData.extras);
+
+          if (extrasError) {
+            console.error('Error fetching extras:', extrasError);
+          } else {
+            orderData.extras = extrasData;
+          }
+        }
+
+        setOrders([orderData]);
+        setFilteredOrders([orderData]);
       } else {
         setError('No order found with this ticket number');
         setOrders([]);
@@ -550,24 +593,75 @@ export default function OrdersScreen() {
             </View>
           </>
         )}
-        <View style={styles.detailRow}>
-          <Text style={[styles.detailLabel, { color: colors.lightText }]}>Total:</Text>
-          <Text style={[styles.detailValue, { color: colors.primary, fontWeight: '600' }]}>
-            ${order.total.toFixed(2)}
-          </Text>
-        </View>
-        <View style={styles.detailRow}>
-          <Text style={[styles.detailLabel, { color: colors.lightText }]}>Payment Status:</Text>
-          <Text style={[styles.detailValue, { color: colors.text }]}>
-            {order.payment_status.toUpperCase()}
-          </Text>
-        </View>
         {order.special_instructions && (
           <View style={styles.detailRow}>
             <Text style={[styles.detailLabel, { color: colors.lightText }]}>Special Instructions:</Text>
             <Text style={[styles.detailValue, { color: colors.text }]}>{order.special_instructions}</Text>
           </View>
         )}
+
+        {order.organs && order.organs.length > 0 && (
+          <View style={styles.detailRow}>
+            <Text style={[styles.detailLabel, { color: colors.lightText }]}>Selected Organs:</Text>
+            <Text style={[styles.detailValue, { color: colors.text }]}>{order.organs.join(', ')}</Text>
+          </View>
+        )}
+
+        <View style={styles.pricingSection}>
+          <Text style={[styles.pricingTitle, { color: colors.text }]}>Price Breakdown</Text>
+          
+          <View style={styles.detailRow}>
+            <Text style={[styles.detailLabel, { color: colors.lightText }]}>Base Price:</Text>
+            <Text style={[styles.detailValue, { color: colors.text }]}>
+              ${order.price_option?.price.toFixed(2)}
+            </Text>
+          </View>
+
+          {order.extras && order.extras.length > 0 && (
+            <>
+              <View style={styles.detailRow}>
+                <Text style={[styles.detailLabel, { color: colors.lightText }]}>Additional Services:</Text>
+                <View style={styles.extrasContainer}>
+                  {order.extras.map((extra, index) => (
+                    <View key={index} style={styles.extraItem}>
+                      <Text style={[styles.extraTitle, { color: colors.text }]}>
+                        {extra.title}
+                      </Text>
+                      <Text style={[styles.extraPrice, { color: colors.primary }]}>
+                        ${extra.price.toFixed(2)}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={[styles.detailLabel, { color: colors.lightText }]}>Extras Total:</Text>
+                <Text style={[styles.detailValue, { color: colors.primary }]}>
+                  ${order.extras.reduce((sum, extra) => sum + extra.price, 0).toFixed(2)}
+                </Text>
+              </View>
+            </>
+          )}
+
+          <View style={styles.divider} />
+          
+          <View style={styles.detailRow}>
+            <Text style={[styles.detailLabel, { color: colors.text, fontWeight: '600' }]}>Total Amount:</Text>
+            <Text style={[styles.detailValue, { color: colors.primary, fontWeight: '700', fontSize: 16 }]}>
+              ${(
+                (order.price_option?.price || 0) + 
+                (order.extras?.reduce((sum, extra) => sum + extra.price, 0) || 0)
+              ).toFixed(2)}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.detailRow}>
+          <Text style={[styles.detailLabel, { color: colors.lightText }]}>Payment Status:</Text>
+          <Text style={[styles.detailValue, { color: colors.text }]}>
+            {order.payment_status.toUpperCase()}
+          </Text>
+        </View>
       </View>
     </View>
   );
@@ -727,7 +821,7 @@ export default function OrdersScreen() {
     </SafeAreaView>
   );
 }
-
+// TODO :change the calender in order page for loged in users to the same like other calends using from and to 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -780,6 +874,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
+  // TODO : handle gacefully when ticket number is not found
+  // TODO: when entering ticket number my phone keyboard is coming up and cover the ticket number input 
   clearFilterButton: {
     marginLeft: 12,
     padding: 8,
@@ -1047,5 +1143,40 @@ const styles = StyleSheet.create({
     marginTop: 0,
     height: 56,
     borderRadius: 12,
+  },
+  extrasContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  extraItem: {
+    padding: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
+    borderRadius: 4,
+    marginRight: 8,
+  },
+  extraTitle: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  extraPrice: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  pricingSection: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(0,0,0,0.1)',
+  },
+  pricingTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    marginVertical: 8,
   },
 }); 

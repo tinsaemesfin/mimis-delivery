@@ -38,6 +38,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (error) throw error;
       
+      // Set the session immediately
+      setSession(data.session);
       return data;
     } catch (error) {
       console.error('Email sign in error:', error);

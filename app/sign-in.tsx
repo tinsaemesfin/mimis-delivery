@@ -57,7 +57,7 @@ export default function SignInScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme || 'light'];
-  const { signInWithEmail, signUpWithEmail } = useAuth();
+  const { signInWithEmail, signUpWithEmail, signOut, loading: authLoading } = useAuth();
   
   const [isLoading, setIsLoading] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
@@ -170,8 +170,13 @@ export default function SignInScreen() {
     
     try {
       setIsLoading(true);
-      await signInWithEmail(email, password);      
-      const isAdmin = await checkIsAdmin(user.id)
+      const { user: signedInUser } = await signInWithEmail(email, password);
+      
+      if (!signedInUser?.id) {
+        throw new Error('Failed to get user information');
+      }
+      
+      const isAdmin = await checkIsAdmin(signedInUser.id);
       if (isAdmin) {
         router.replace('/(admin-tabs)');
       } else {
@@ -222,21 +227,23 @@ export default function SignInScreen() {
     }
   };
 
-  const handleContinueAsGuest = () => {
-    router.replace('/(tabs)');
+  const handleContinueAsGuest = async () => {
+    try {
+      setIsLoading(true);
+      // Sign out any existing session first
+      await signOut();
+      // Then redirect to tabs
+      router.replace('/(tabs)');
+    } catch (error) {
+      console.error('Error continuing as guest:', error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handlePhoneNumberChange = (text: string) => {
     setPhoneNumber(formatPhoneNumber(text));
   };
-
-  if (isLoading) {
-    return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -474,6 +481,12 @@ export default function SignInScreen() {
           />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {(isLoading || authLoading) && (
+        <View style={[styles.loadingOverlay, { backgroundColor: colors.background + 'CC' }]}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -597,5 +610,16 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     zIndex: 0,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 999,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
   },
 }); 

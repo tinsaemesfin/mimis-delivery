@@ -15,7 +15,7 @@ export default function TabLayout() {
       screenOptions={{
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.tabIconDefault,
-        headerShown: false,
+        headerShown: true,
         tabBarStyle: {
           backgroundColor: '#FFFFFF',
           borderTopColor: 'rgba(0, 0, 0, 0.1)',
@@ -31,11 +31,13 @@ export default function TabLayout() {
       }}>
       <Tabs.Screen
         name="index"
+        
         options={{
           title: 'Home',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="home" size={size} color={color} />
           ),
+          headerShown: false,
         }}
       />
       <Tabs.Screen
@@ -44,15 +46,6 @@ export default function TabLayout() {
           title: 'Orders',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="receipt" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="admin"
-        options={{
-          title: 'Admin',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="settings" size={size} color={color} />
           ),
         }}
       />

@@ -40,7 +40,7 @@ export default function HomeScreen() {
           style={styles.scrollView}
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingBottom: Platform.OS === 'ios' ? 100 : 96 } // Add padding for FAB
+            { paddingBottom: Platform.OS === 'ios' ? 50 : 30 } // Add padding for FAB
           ]}
           showsVerticalScrollIndicator={false}
           bounces={false}

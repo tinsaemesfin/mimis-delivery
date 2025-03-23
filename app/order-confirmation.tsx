@@ -35,7 +35,7 @@ Phone: ${params.phoneNumber}
 Address: ${params.address}
 Animal: ${params.animalType} (${params.size})
 Price Option: ${params.priceName}
-Total: $${params.price}
+Total: $${params.finalPrice}
 Cutting Style: ${params.cuttingStyleName}
 ${params.selectedOrgans ? `Selected Organs: ${params.selectedOrgans}` : ''}
 
@@ -131,7 +131,7 @@ Please keep this information for your records.
             <View style={styles.detailRow}>
               <Text style={[styles.detailLabel, { color: colors.lightText }]}>Total:</Text>
               <Text style={[styles.detailValue, { color: colors.primary, fontWeight: '600' }]}>
-                ${params.price}
+                ${params.finalPrice}
               </Text>
             </View>
             
@@ -144,6 +144,15 @@ Please keep this information for your records.
               <View style={styles.detailRow}>
                 <Text style={[styles.detailLabel, { color: colors.lightText }]}>Selected Organs:</Text>
                 <Text style={[styles.detailValue, { color: colors.text }]}>{params.selectedOrgans}</Text>
+              </View>
+            )}
+
+            {params.selectedExtras && (
+              <View style={styles.detailRow}>
+                <Text style={[styles.detailLabel, { color: colors.lightText }]}>Additional Services:</Text>
+                <Text style={[styles.detailValue, { color: colors.text }]}>
+                  {JSON.parse(params.selectedExtras as string).map((extra: any) => extra.title).join(', ')}
+                </Text>
               </View>
             )}
           </View>

@@ -138,17 +138,7 @@ export default function PriceSelectionScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
-      
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Select Price Option</Text>
-        <View style={styles.placeholder} />
-      </View>
+  
 
       <View style={styles.selectionInfo}>
         <Text style={[styles.selectionText, { color: colors.text }]}>
