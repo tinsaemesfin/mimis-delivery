@@ -249,10 +249,15 @@ export default function SignInScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar style="light" />
       <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1 }}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           <View style={styles.content}>
             <View style={styles.logoContainer}>
               <View style={[styles.logoCircle, createShadow('rgba(200, 25, 25, 0.5)', { width: 0, height: 4 }, 0.25, 10)]}>
@@ -497,16 +502,16 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
+    justifyContent: 'space-between',
   },
   content: {
     flex: 1,
-    justifyContent: 'space-between',
     padding: 24,
     zIndex: 1,
   },
   logoContainer: {
     alignItems: 'center',
-    marginTop: height * 0.05,
+    marginTop: Platform.OS === 'ios' ? height * 0.05 : height * 0.02,
     marginBottom: 20,
   },
   logoCircle: {

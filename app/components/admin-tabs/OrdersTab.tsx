@@ -55,9 +55,10 @@ interface OrdersTabProps {
   setSelectedOrder: React.Dispatch<React.SetStateAction<Order | null>>;
   openStatusModal: (order: Order) => void;
   onExport?: () => void;
+  onEditOrder?: (order: Order) => void;
 }
 
-export default function OrdersTab({ orders, setSelectedOrder, openStatusModal, onExport }: OrdersTabProps) {
+export default function OrdersTab({ orders, setSelectedOrder, openStatusModal, onExport, onEditOrder }: OrdersTabProps) {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme || 'light'];
 
@@ -405,12 +406,26 @@ export default function OrdersTab({ orders, setSelectedOrder, openStatusModal, o
                   </Text>
                 </View>
               </View>
-              <TouchableOpacity 
-                style={[styles.modalCloseButton, { backgroundColor: colors.card }]}
-                onPress={() => setOrderDetailsVisible(false)}
-              >
-                <Ionicons name="close" size={24} color={colors.text} />
-              </TouchableOpacity>
+              <View style={styles.modalHeaderButtons}>
+                {onEditOrder && selectedOrderDetails && (
+                  <TouchableOpacity 
+                    style={[styles.modalActionButton, { backgroundColor: colors.secondary }]}
+                    onPress={() => {
+                      setOrderDetailsVisible(false);
+                      onEditOrder(selectedOrderDetails);
+                    }}
+                  >
+                    <Ionicons name="create-outline" size={20} color="white" />
+                    <Text style={styles.modalActionButtonText}>Edit</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity 
+                  style={[styles.modalCloseButton, { backgroundColor: colors.card }]}
+                  onPress={() => setOrderDetailsVisible(false)}
+                >
+                  <Ionicons name="close" size={24} color={colors.text} />
+                </TouchableOpacity>
+              </View>
             </View>
             
             {/* Status Selector at the top */}
@@ -1045,5 +1060,22 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '800',
     letterSpacing: 0.5,
+  },
+  modalHeaderButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  modalActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginRight: 8,
+  },
+  modalActionButtonText: {
+    color: 'white',
+    fontWeight: '500',
+    marginLeft: 4,
   },
 }); 
