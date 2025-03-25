@@ -23,11 +23,6 @@
             "CFBundleURLSchemes": [
               "mimisdelivery"
             ]
-          },
-          {
-            "CFBundleURLSchemes": [
-              "mimisdelivery"
-            ]
           }
         ],
         "NSPhotoLibraryUsageDescription": "We need access to save Excel files to your device.",
@@ -45,30 +40,9 @@
       "package": "com.mimisdelivery.app",
       "permissions": [
         "WRITE_EXTERNAL_STORAGE",
-        "READ_EXTERNAL_STORAGE",
-        "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.ACCESS_MEDIA_LOCATION",
-        "WRITE_EXTERNAL_STORAGE",
-        "READ_EXTERNAL_STORAGE",
-        "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.ACCESS_MEDIA_LOCATION"
+        "READ_EXTERNAL_STORAGE"
       ],
       "intentFilters": [
-        {
-          "action": "VIEW",
-          "autoVerify": true,
-          "data": [
-            {
-              "scheme": "mimisdelivery"
-            }
-          ],
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
-        },
         {
           "action": "VIEW",
           "autoVerify": true,
