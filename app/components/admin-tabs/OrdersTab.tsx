@@ -13,6 +13,7 @@ import {
   TextStyle,
   ViewStyle,
   ActivityIndicator,
+  PermissionsAndroid,
 } from 'react-native';
 import { Colors } from '../../../constants/Colors';
 import { useColorScheme } from '../../../hooks/useColorScheme';
@@ -21,6 +22,10 @@ import { Calendar, DateData } from 'react-native-calendars';
 import { format, isWithinInterval, parseISO } from 'date-fns';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../../utils/supabase';
+import * as XLSX from 'xlsx';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import * as MediaLibrary from 'expo-media-library';
 
 interface Order {
   id: string;
@@ -57,6 +62,139 @@ interface OrdersTabProps {
   onExport?: () => void;
   onEditOrder?: (order: Order) => void;
 }
+
+// Add permission request function
+const requestStoragePermission = async () => {
+  if (Platform.OS === 'android') {
+    try {
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+        {
+          title: 'Storage Permission',
+          message: 'App needs access to storage to save Excel files.',
+          buttonNeutral: 'Ask Me Later',
+          buttonNegative: 'Cancel',
+          buttonPositive: 'OK',
+        }
+      );
+      return granted === PermissionsAndroid.RESULTS.GRANTED;
+    } catch (err) {
+      console.error('Permission error:', err);
+      return false;
+    }
+  } else if (Platform.OS === 'ios') {
+    const { status } = await MediaLibrary.requestPermissionsAsync();
+    return status === 'granted';
+  }
+  return true;
+};
+
+// Add the export function at the top level
+const exportToExcel = async (orders: Order[]) => {
+  try {
+    // Request permissions first
+    const { status } = await MediaLibrary.requestPermissionsAsync();
+    if (status !== 'granted') {
+      throw new Error('Storage permission not granted');
+    }
+
+    // Transform orders data for Excel
+    const excelData = orders.map(order => ({
+      'Order ID': order.order_ticket || order.id,
+      'Customer Name': order.customerName,
+      'Phone Number': order.phoneNumber || 'N/A',
+      'Address': order.address || 'N/A',
+      'Order Date': format(parseISO(order.date), 'MMM dd, yyyy'),
+      'Status': order.status.charAt(0).toUpperCase() + order.status.slice(1),
+      'Animal Type': order.animalType,
+      'Size': order.size,
+      'Cut Style': order.cutStyle,
+      'Divided': order.divided,
+      'Selected Organs': order.organs ? order.organs.join(', ') : 'None',
+      'Base Price': order.price_option?.price || 0,
+      'Additional Services': order.extras ? order.extras.map(extra => `${extra.title} ($${extra.price})`).join(', ') : 'None',
+      'Total Amount': order.total,
+      'Special Instructions': order.special_instructions || 'None',
+      'Created At': order.created_at ? format(parseISO(order.created_at), 'MMM dd, yyyy HH:mm:ss') : 'N/A'
+    }));
+
+    // Create worksheet
+    const ws = XLSX.utils.json_to_sheet(excelData);
+
+    // Set column widths
+    const columnWidths = [
+      { wch: 15 }, // Order ID
+      { wch: 20 }, // Customer Name
+      { wch: 15 }, // Phone Number
+      { wch: 30 }, // Address
+      { wch: 15 }, // Order Date
+      { wch: 12 }, // Status
+      { wch: 15 }, // Animal Type
+      { wch: 10 }, // Size
+      { wch: 15 }, // Cut Style
+      { wch: 10 }, // Divided
+      { wch: 25 }, // Selected Organs
+      { wch: 12 }, // Base Price
+      { wch: 40 }, // Additional Services
+      { wch: 12 }, // Total Amount
+      { wch: 30 }, // Special Instructions
+      { wch: 20 }, // Created At
+    ];
+    ws['!cols'] = columnWidths;
+
+    // Create workbook
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Orders');
+
+    // Generate Excel file
+    const excelFile = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
+
+    // Get current date for filename
+    const currentDate = format(new Date(), 'yyyy-MM-dd_HH-mm');
+    const fileName = `orders_export_${currentDate}.xlsx`;
+
+    // Save file to cache directory first
+    const filePath = `${FileSystem.cacheDirectory}${fileName}`;
+    await FileSystem.writeAsStringAsync(filePath, excelFile, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+
+    // Check if sharing is available
+    const isAvailable = await Sharing.isAvailableAsync();
+    
+    if (isAvailable) {
+      // Share the file
+      await Sharing.shareAsync(filePath, {
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        dialogTitle: 'Export Orders',
+        UTI: 'com.microsoft.excel.xlsx'
+      });
+
+      // Try to save to media library as well (might work on some devices)
+      try {
+        const asset = await MediaLibrary.createAssetAsync(filePath);
+        await MediaLibrary.createAlbumAsync('Mimi\'s Delivery', asset, false);
+      } catch (err) {
+        console.warn('Could not save to media library:', err);
+        // This is okay, we'll still have the share sheet
+      }
+    } else {
+      throw new Error('Sharing is not available on this device');
+    }
+
+    // Clean up the cache file
+    try {
+      await FileSystem.deleteAsync(filePath, { idempotent: true });
+    } catch (err) {
+      console.warn('Could not clean up cache file:', err);
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Export error:', error);
+    throw error;
+  }
+};
 
 export default function OrdersTab({ orders, setSelectedOrder, openStatusModal, onExport, onEditOrder }: OrdersTabProps) {
   const colorScheme = useColorScheme();
@@ -251,19 +389,79 @@ export default function OrdersTab({ orders, setSelectedOrder, openStatusModal, o
     return markedDates;
   };
 
+  // Add handleExport function inside the component
+  const handleExport = async () => {
+    try {
+      if (filteredOrders.length === 0) {
+        Alert.alert('No Orders', 'There are no orders to export.');
+        return;
+      }
+
+      Alert.alert(
+        'Export Orders',
+        `Export ${filteredOrders.length} orders to Excel?`,
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel'
+          },
+          {
+            text: 'Export',
+            onPress: async () => {
+              try {
+                await exportToExcel(filteredOrders);
+                Alert.alert(
+                  'Success', 
+                  'Orders exported successfully!\n\n' +
+                  'Please select where to save or share the file from the share sheet.'
+                );
+              } catch (error) {
+                console.error('Export error:', error);
+                if (error instanceof Error) {
+                  if (error.message === 'Storage permission not granted') {
+                    Alert.alert(
+                      'Permission Required',
+                      'Please grant storage permission to save Excel files to your device.'
+                    );
+                  } else if (error.message === 'Sharing is not available on this device') {
+                    Alert.alert(
+                      'Error',
+                      'Sharing is not available on this device. Please try using a development build or the production app.'
+                    );
+                  } else {
+                    Alert.alert(
+                      'Export Failed',
+                      'Failed to export orders. Please try again.'
+                    );
+                  }
+                } else {
+                  Alert.alert(
+                    'Export Failed',
+                    'An unexpected error occurred. Please try again.'
+                  );
+                }
+              }
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('Export error:', error);
+      Alert.alert('Error', 'Failed to export orders. Please try again.');
+    }
+  };
+
   return (
     <View style={styles.tabContent}>
       <View style={styles.filterSection}>
         <View style={styles.headerRow}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Order History</Text>
-          {onExport && (
             <Button 
               title="Export to Excel" 
-              onPress={onExport}
+            onPress={handleExport}
               style={styles.exportButton}
               variant="primary"
             />
-          )}
         </View>
         
         <View style={styles.filterRow}>

@@ -918,9 +918,9 @@ export default function AdminOrdersScreen() {
                           <Picker.Item key={style.id} label={style.title} value={style.id} />
                         ))}
                       </Picker>
-                    </View>
-                  </View>
-                  
+                </View>
+              </View>
+
                   <View style={styles.formRow}>
                     <Text style={styles.label}>Price Option</Text>
                     <View style={[styles.pickerContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -941,7 +941,7 @@ export default function AdminOrdersScreen() {
                         ))}
                       </Picker>
                     </View>
-                  </View>
+                </View>
                   
                   <View style={styles.formRow}>
                     <Text style={styles.label}>Divided in Two</Text>
@@ -974,11 +974,11 @@ export default function AdminOrdersScreen() {
                           { color: !isDivided ? 'white' : colors.text }
                         ]}>
                           No
-                        </Text>
+                  </Text>
                       </TouchableOpacity>
-                    </View>
-                  </View>
-                  
+                </View>
+              </View>
+
                   <View style={styles.formRow}>
                     <Text style={styles.label}>Additional Services</Text>
                     <View style={styles.extrasContainer}>
@@ -1002,17 +1002,17 @@ export default function AdminOrdersScreen() {
                             {selectedExtras.includes(extra.id) && (
                               <Ionicons name="checkmark" size={16} color={colors.primary} />
                             )}
-                          </View>
+                </View>
                           <View style={styles.extraInfo}>
                             <Text style={[styles.extraTitle, { color: colors.text }]}>{extra.title}</Text>
                             <Text style={[styles.extraPrice, { color: colors.primary }]}>
                               ${extra.price.toFixed(2)}
-                            </Text>
-                          </View>
+                  </Text>
+                </View>
                         </TouchableOpacity>
                       ))}
-                    </View>
-                  </View>
+            </View>
+          </View>
                   
                   <View style={styles.formRow}>
                     <Text style={styles.label}>Selected Organs</Text>
@@ -1021,9 +1021,9 @@ export default function AdminOrdersScreen() {
                       {organOptions
                         .filter(organ => organ.is_active || (selectedOrgans && selectedOrgans.includes(organ.name)))
                         .map((organ) => (
-                          <TouchableOpacity
+        <TouchableOpacity
                             key={organ.id}
-                            style={[
+          style={[
                               styles.organOption,
                               { borderColor: colors.border },
                               selectedOrgans.includes(organ.name) && { backgroundColor: colors.primary + '20', borderColor: colors.primary },
@@ -1057,7 +1057,7 @@ export default function AdminOrdersScreen() {
                               {organ.name}
                               {!organ.is_active && " (inactive)"}
                             </Text>
-                          </TouchableOpacity>
+        </TouchableOpacity>
                         ))}
                       
                       {/* Show a message if there are no active organs */}
@@ -1091,7 +1091,7 @@ export default function AdminOrdersScreen() {
                 }
               />
             </View>
-          </View>
+      </View>
         </SafeAreaView>
       </Modal>
     </SafeAreaView>

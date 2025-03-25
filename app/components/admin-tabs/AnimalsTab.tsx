@@ -10,12 +10,16 @@ import {
   Alert,
   ActivityIndicator,
   RefreshControl,
+  Image,
+  Platform,
 } from 'react-native';
 import { Colors } from '../../../constants/Colors';
 import { useColorScheme } from '../../../hooks/useColorScheme';
 import Button from '../../../components/Button';
 import { supabase } from '../../../utils/supabase';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import { decode } from 'base64-arraybuffer';
 
 interface AnimalItem {
   id: string;
@@ -30,6 +34,47 @@ interface AnimalsTabProps {
   animals: AnimalItem[];
   setAnimals: React.Dispatch<React.SetStateAction<AnimalItem[]>>;
 }
+
+// Add image upload function
+const uploadImage = async (base64Image: string, path: string) => {
+  try {
+    const { data, error } = await supabase.storage
+      .from('mimis-storage')
+      .upload(path, decode(base64Image), {
+        contentType: 'image/jpeg',
+        upsert: true
+      });
+
+    if (error) throw error;
+    
+    // Get public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from('mimis-storage')
+      .getPublicUrl(path);
+
+    return publicUrl;
+  } catch (error) {
+    console.error('Error uploading image:', error);
+    throw error;
+  }
+};
+
+// Add function to get image URL
+const getImageUrl = (path: string | null): string | undefined => {
+  if (!path) return undefined;
+  
+  // If the path is already a full URL, return it
+  if (path.startsWith('http')) {
+    return path;
+  }
+  
+  // Otherwise, generate the public URL
+  const { data: { publicUrl } } = supabase.storage
+    .from('mimis-storage')
+    .getPublicUrl(path);
+    
+  return publicUrl;
+};
 
 export default function AnimalsTab({ animals: initialAnimals, setAnimals: setParentAnimals }: AnimalsTabProps) {
   const colorScheme = useColorScheme();
@@ -48,6 +93,8 @@ export default function AnimalsTab({ animals: initialAnimals, setAnimals: setPar
   const [currentAnimal, setCurrentAnimal] = useState<AnimalItem | null>(null);
   const [newAnimalName, setNewAnimalName] = useState('');
   const [newAnimalDescription, setNewAnimalDescription] = useState('');
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
   
   // Fetch animals from Supabase
   const fetchAnimals = async () => {
@@ -108,36 +155,71 @@ export default function AnimalsTab({ animals: initialAnimals, setAnimals: setPar
     setFilteredAnimals(filtered);
   };
   
-  // Add a new animal
+  // Add image picker function
+  const pickImage = async () => {
+    try {
+      // Request permissions
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Please grant permission to access your photos');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets[0].base64) {
+        setSelectedImage(result.assets[0].base64);
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to pick image');
+    }
+  };
+  
+  // Update addAnimal function
   const addAnimal = async () => {
     if (newAnimalName.trim() === '') {
       Alert.alert('Error', 'Please enter an animal name');
       return;
     }
-    
+
     try {
       setLoading(true);
-      
+      let imageUrl = null;
+
+      // Upload image if selected
+      if (selectedImage) {
+        setUploadingImage(true);
+        const path = `${Date.now()}-${newAnimalName.toLowerCase().replace(/\s+/g, '-')}.jpg`;
+        imageUrl = await uploadImage(selectedImage, path);
+      }
+
       const newAnimal = {
         title: newAnimalName.trim(),
         description: newAnimalDescription.trim(),
-        is_active: true
+        is_active: true,
+        image_url: imageUrl,
       };
-      
+
       const { data, error } = await supabase
         .from('animals')
         .insert([newAnimal])
         .select();
-      
-      if (error) {
-        throw error;
-      }
-      
+
+      if (error) throw error;
+
       Alert.alert('Success', 'Animal added successfully');
       setNewAnimalName('');
       setNewAnimalDescription('');
+      setSelectedImage(null);
       setModalVisible(false);
-      
+
       // Refresh the animals list
       fetchAnimals();
     } catch (err) {
@@ -145,42 +227,51 @@ export default function AnimalsTab({ animals: initialAnimals, setAnimals: setPar
       Alert.alert('Error', 'Failed to add animal');
     } finally {
       setLoading(false);
+      setUploadingImage(false);
     }
   };
   
-  // Update an existing animal
+  // Update updateAnimal function
   const updateAnimal = async () => {
     if (!currentAnimal) return;
-    
+
     if (newAnimalName.trim() === '') {
       Alert.alert('Error', 'Please enter an animal name');
       return;
     }
-    
+
     try {
       setLoading(true);
-      
+      let imageUrl = currentAnimal.image_url;
+
+      // Upload new image if selected
+      if (selectedImage) {
+        setUploadingImage(true);
+        const path = `${Date.now()}-${newAnimalName.toLowerCase().replace(/\s+/g, '-')}.jpg`;
+        imageUrl = await uploadImage(selectedImage, path);
+      }
+
       const updatedAnimal = {
         title: newAnimalName.trim(),
-        description: newAnimalDescription.trim()
+        description: newAnimalDescription.trim(),
+        image_url: imageUrl,
       };
-      
+
       const { error } = await supabase
         .from('animals')
         .update(updatedAnimal)
         .eq('id', currentAnimal.id);
-      
-      if (error) {
-        throw error;
-      }
-      
+
+      if (error) throw error;
+
       Alert.alert('Success', 'Animal updated successfully');
       setNewAnimalName('');
       setNewAnimalDescription('');
+      setSelectedImage(null);
       setModalVisible(false);
       setEditMode(false);
       setCurrentAnimal(null);
-      
+
       // Refresh the animals list
       fetchAnimals();
     } catch (err) {
@@ -188,6 +279,7 @@ export default function AnimalsTab({ animals: initialAnimals, setAnimals: setPar
       Alert.alert('Error', 'Failed to update animal');
     } finally {
       setLoading(false);
+      setUploadingImage(false);
     }
   };
   
@@ -215,11 +307,12 @@ export default function AnimalsTab({ animals: initialAnimals, setAnimals: setPar
     }
   };
   
-  // Open edit modal
+  // Update openEditModal function
   const openEditModal = (animal: AnimalItem) => {
     setCurrentAnimal(animal);
     setNewAnimalName(animal.title);
     setNewAnimalDescription(animal.description || '');
+    setSelectedImage(null); // Reset selected image
     setEditMode(true);
     setModalVisible(true);
   };
@@ -373,6 +466,7 @@ export default function AnimalsTab({ animals: initialAnimals, setAnimals: setPar
           setModalVisible(false);
           setEditMode(false);
           setCurrentAnimal(null);
+          setSelectedImage(null);
         }}
       >
         <View style={styles.modalOverlay}>
@@ -380,6 +474,39 @@ export default function AnimalsTab({ animals: initialAnimals, setAnimals: setPar
             <Text style={[styles.modalTitle, { color: colors.text }]}>
               {editMode ? 'Edit Animal' : 'Add New Animal'}
             </Text>
+            
+            {/* Image Selection */}
+            <TouchableOpacity 
+              style={[styles.imageContainer, { borderColor: colors.border }]} 
+              onPress={pickImage}
+              activeOpacity={0.8}
+            >
+              {selectedImage ? (
+                <Image 
+                  source={{ uri: `data:image/jpeg;base64,${selectedImage}` }}
+                  style={styles.selectedImage}
+                />
+              ) : currentAnimal?.image_url ? (
+                <Image 
+                  source={{ uri: getImageUrl(currentAnimal.image_url) }}
+                  style={styles.selectedImage}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={styles.imagePlaceholder}>
+                  <Ionicons name="camera" size={40} color="#666" />
+                  <Text style={styles.imagePlaceholderText}>Tap to add image</Text>
+                </View>
+              )}
+              <View style={[
+                styles.imageOverlay,
+                (selectedImage || currentAnimal?.image_url) && styles.imageOverlayVisible
+              ]}>
+                <Text style={styles.imageOverlayText}>
+                  {selectedImage || currentAnimal?.image_url ? 'Tap to change' : 'Tap to select'}
+                </Text>
+              </View>
+            </TouchableOpacity>
             
             <TextInput
               style={[styles.input, { borderColor: colors.border, color: colors.text }]}
@@ -407,6 +534,7 @@ export default function AnimalsTab({ animals: initialAnimals, setAnimals: setPar
                   setModalVisible(false);
                   setEditMode(false);
                   setCurrentAnimal(null);
+                  setSelectedImage(null);
                 }}
                 style={styles.modalButton}
                 variant="outline"
@@ -415,9 +543,18 @@ export default function AnimalsTab({ animals: initialAnimals, setAnimals: setPar
                 title={editMode ? "Update" : "Add"} 
                 onPress={editMode ? updateAnimal : addAnimal}
                 style={styles.modalButton}
-                disabled={loading}
+                disabled={loading || uploadingImage}
               />
             </View>
+            
+            {(loading || uploadingImage) && (
+              <View style={styles.loadingOverlay}>
+                <ActivityIndicator size="large" color={colors.primary} />
+                <Text style={[styles.loadingText, { color: colors.text }]}>
+                  {uploadingImage ? 'Uploading image...' : 'Processing...'}
+                </Text>
+              </View>
+            )}
           </View>
         </View>
       </Modal>
@@ -483,10 +620,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 16,
   },
   errorContainer: {
     flex: 1,
@@ -604,5 +737,63 @@ const styles = StyleSheet.create({
   modalButton: {
     flex: 1,
     marginHorizontal: 5,
+  },
+  imageContainer: {
+    width: '100%',
+    height: 200,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 16,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+  },
+  selectedImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  imagePlaceholder: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imagePlaceholderText: {
+    marginTop: 8,
+    fontSize: 14,
+  },
+  imageOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    opacity: 0,
+  },
+  imageOverlayVisible: {
+    opacity: 1,
+  },
+  imageOverlayText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    fontWeight: '500',
   },
 }); 

@@ -341,7 +341,6 @@ export default function OrderDetailsScreen() {
         })
         .select()
         .single();
-// TODO: update the price from admin side
       if (orderError) {
         console.error('Error creating order:', orderError);
         Alert.alert('Error', 'Failed to create order. Please try again.');
@@ -873,10 +872,6 @@ const styles = StyleSheet.create({
 }); 
 
 
-
-// cutting style creating admin panel 
-// we sell only full lamb and sheep and goat the admin should be able to add animal type
-// admin export the data in excel file
 
 
 

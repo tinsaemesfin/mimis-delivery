@@ -12,7 +12,8 @@ import {
   Alert,
   ActivityIndicator,
   Modal,
-  Pressable
+  Pressable,
+  Linking
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { useColorScheme } from '../../hooks/useColorScheme';
@@ -55,6 +56,8 @@ export default function ProfileScreen() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+  const [helpCenterVisible, setHelpCenterVisible] = useState(false);
+  const [aboutUsVisible, setAboutUsVisible] = useState(false);
   
   // Edit form state
   const [editFullName, setEditFullName] = useState('');
@@ -145,6 +148,18 @@ export default function ProfileScreen() {
     setEditPhoneNumber(formatPhoneNumber(text));
   };
 
+  const handleHelpCenterPress = () => {
+    setHelpCenterVisible(true);
+  };
+
+  const handleAboutUsPress = () => {
+    setAboutUsVisible(true);
+  };
+
+  const handleAradaTechPress = () => {
+    Linking.openURL('https://aradatech.com/');
+  };
+
   const renderMenuItem = (
     icon: string,
     title: string,
@@ -214,13 +229,7 @@ export default function ProfileScreen() {
             'Update your personal details',
             () => setIsEditModalVisible(true)
           )}
-          
-          {renderMenuItem(
-            'location-outline',
-            'Saved Addresses',
-            'Manage your delivery addresses',
-            () => {}
-          )}
+        
         </View>
 
         <View style={[styles.menuSection, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -230,14 +239,14 @@ export default function ProfileScreen() {
             'help-circle-outline',
             'Help Center',
             'Get help with your orders',
-            () => {}
+            handleHelpCenterPress
           )}
           
           {renderMenuItem(
             'information-circle-outline',
             'About Us',
             'Learn more about Mimi\'s Delivery',
-            () => {}
+            handleAboutUsPress
           )}
         </View>
 
@@ -248,7 +257,109 @@ export default function ProfileScreen() {
           <Ionicons name="log-out-outline" size={20} color="white" style={styles.logoutIcon} />
           <Text style={styles.logoutText}>Sign Out</Text>
         </TouchableOpacity>
+
+        <View style={styles.developerCredit}>
+          <Text style={[styles.developerText, { color: colors.lightText }]}>
+            Developed by Tinsae Mesfin -{' '}
+            <Text 
+              style={[styles.developerLink, { color: colors.primary }]}
+              onPress={handleAradaTechPress}
+            >
+              Arada Tech
+            </Text>
+          </Text>
+        </View>
       </ScrollView>
+
+      {/* Help Center Modal */}
+      <Modal
+        visible={helpCenterVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setHelpCenterVisible(false)}
+      >
+        <Pressable 
+          style={styles.modalOverlay} 
+          onPress={() => setHelpCenterVisible(false)}
+        >
+          <Pressable 
+            style={[styles.modalContent, { backgroundColor: colors.background }]}
+            onPress={e => e.stopPropagation()}
+          >
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>
+                Help Center
+              </Text>
+              <TouchableOpacity onPress={() => setHelpCenterVisible(false)}>
+                <Ionicons name="close" size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalBody}>
+              <View style={styles.contactSection}>
+                <Text style={[styles.contactTitle, { color: colors.text }]}>Contact Us</Text>
+                <View style={styles.contactItem}>
+                  <Ionicons name="call-outline" size={20} color={colors.primary} />
+                  <Text style={[styles.contactText, { color: colors.text }]}>
+                    +1 (555) 123-4567
+                  </Text>
+                </View>
+                <View style={styles.contactItem}>
+                  <Ionicons name="call-outline" size={20} color={colors.primary} />
+                  <Text style={[styles.contactText, { color: colors.text }]}>
+                    +1 (555) 987-6543
+                  </Text>
+                </View>
+                <View style={styles.contactItem}>
+                  <Ionicons name="location-outline" size={20} color={colors.primary} />
+                  <Text style={[styles.contactText, { color: colors.text }]}>
+                    123 Delivery Street{'\n'}New York, NY 10001
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* About Us Dialog */}
+      <Modal
+        visible={aboutUsVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setAboutUsVisible(false)}
+      >
+        <Pressable 
+          style={styles.dialogOverlay} 
+          onPress={() => setAboutUsVisible(false)}
+        >
+          <Pressable 
+            style={[styles.dialogContent, { backgroundColor: colors.background }]}
+            onPress={e => e.stopPropagation()}
+          >
+            <View style={styles.dialogHeader}>
+              <Text style={[styles.dialogTitle, { color: colors.text }]}>
+                About Mimi's Delivery
+              </Text>
+              <TouchableOpacity onPress={() => setAboutUsVisible(false)}>
+                <Ionicons name="close" size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.dialogBody}>
+              <Text style={[styles.aboutText, { color: colors.text }]}>
+                Mimi's Delivery is your trusted partner for premium meat delivery services. 
+                We specialize in providing high-quality, fresh meat products with convenient 
+                delivery options right to your doorstep.
+              </Text>
+              <Text style={[styles.aboutText, { color: colors.text }]}>
+                Our commitment to quality, customer service, and timely delivery has made 
+                us a preferred choice for meat delivery services in the area.
+              </Text>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* Edit Profile Modal */}
       <Modal
@@ -564,5 +675,63 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
+  },
+  developerCredit: {
+    alignItems: 'center',
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+  },
+  developerText: {
+    fontSize: 14,
+  },
+  developerLink: {
+    textDecorationLine: 'underline',
+  },
+  contactSection: {
+    marginTop: 16,
+  },
+  contactTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 16,
+  },
+  contactItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  contactText: {
+    fontSize: 16,
+    marginLeft: 12,
+  },
+  dialogOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dialogContent: {
+    width: '90%',
+    maxWidth: 400,
+    borderRadius: 12,
+    padding: 20,
+  },
+  dialogHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  dialogTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+  },
+  dialogBody: {
+    marginTop: 8,
+  },
+  aboutText: {
+    fontSize: 16,
+    lineHeight: 24,
+    marginBottom: 12,
   },
 }); 

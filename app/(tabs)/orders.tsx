@@ -22,6 +22,8 @@ import { createShadow } from '../../utils/styling';
 import Button from '../../components/Button';
 import { supabase } from '../../utils/supabase';
 import { User } from '@supabase/supabase-js';
+import { Calendar } from 'react-native-calendars';
+import { format, parseISO, isWithinInterval } from 'date-fns';
 
 interface Order {
   id: string;
@@ -81,12 +83,11 @@ export default function OrdersScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ticketNumber, setTicketNumber] = useState('');
-  const [dateFilterVisible, setDateFilterVisible] = useState(false);
+  const [calendarVisible, setCalendarVisible] = useState(false);
+  const [selectingStartDate, setSelectingStartDate] = useState(true);
   const [startDate, setStartDate] = useState<string | null>(null);
   const [endDate, setEndDate] = useState<string | null>(null);
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
-  const [tempStartDate, setTempStartDate] = useState<string | null>(null);
-  const [tempEndDate, setTempEndDate] = useState<string | null>(null);
   
   // Check auth state
   useEffect(() => {
@@ -265,230 +266,112 @@ export default function OrdersScreen() {
     }
   };
 
-  const formatDateForDisplay = (dateString: string | null) => {
-    if (!dateString) return 'Any';
-    return new Date(dateString).toLocaleDateString();
+  // Update filtered orders whenever filters change
+  useEffect(() => {
+    let results = [...orders];
+    
+    // Apply date filter
+    if (startDate && endDate) {
+      try {
+        const start = parseISO(startDate);
+        const end = parseISO(endDate);
+        
+        results = results.filter(order => {
+          try {
+            const orderDate = parseISO(order.created_at);
+            return isWithinInterval(orderDate, { start, end });
+          } catch (e) {
+            console.warn('Error parsing order date:', e);
+            return false;
+          }
+        });
+      } catch (e) {
+        console.warn('Error with date filtering:', e);
+      }
+    }
+    
+    setFilteredOrders(results);
+  }, [orders, startDate, endDate]);
+
+  // Handle date selection in calendar
+  const handleDateSelect = (day: any) => {
+    const selectedDate = day.dateString;
+    
+    if (selectingStartDate) {
+      setStartDate(selectedDate);
+      setSelectingStartDate(false);
+    } else {
+      // Ensure endDate is after startDate
+      if (startDate && selectedDate < startDate) {
+        setEndDate(startDate);
+        setStartDate(selectedDate);
+      } else {
+        setEndDate(selectedDate);
+      }
+      setCalendarVisible(false);
+    }
   };
 
-  const openDateFilter = () => {
-    setTempStartDate(startDate);
-    setTempEndDate(endDate);
-    setDateFilterVisible(true);
-  };
-
-  const applyDateFilter = () => {
-    setStartDate(tempStartDate);
-    setEndDate(tempEndDate);
-    setDateFilterVisible(false);
-  };
-
+  // Clear date filter
   const clearDateFilter = () => {
     setStartDate(null);
     setEndDate(null);
-    setTempStartDate(null);
-    setTempEndDate(null);
-    setDateFilterVisible(false);
   };
 
-  const cancelDateFilter = () => {
-    setTempStartDate(startDate);
-    setTempEndDate(endDate);
-    setDateFilterVisible(false);
+  // Format date for display
+  const formatDate = (dateString: string) => {
+    try {
+      return format(parseISO(dateString), 'MMM dd, yyyy');
+    } catch (e) {
+      console.warn('Error formatting date:', e);
+      return dateString;
+    }
   };
 
-  // Simple date picker for demo - in a real app, you'd use a proper date picker component
-  const renderDatePicker = () => {
-    // Current year and years for selection
-    const currentYear = new Date().getFullYear();
-    const years = Array.from({length: 5}, (_, i) => currentYear - 2 + i);
+  // Get marked dates for calendar
+  const getMarkedDates = () => {
+    const markedDates: any = {};
     
-    // Months for selection
-    const months = [
-      "January", "February", "March", "April", "May", "June",
-      "July", "August", "September", "October", "November", "December"
-    ];
-
-    const handleDateSelect = (year: number, month: number, isStart: boolean) => {
-      // Create a date string (YYYY-MM-DD) with the first day for start date or last day for end date
-      const date = new Date(year, month, isStart ? 1 : new Date(year, month + 1, 0).getDate());
-      const dateString = date.toISOString().split('T')[0];
-      
-      if (isStart) {
-        setTempStartDate(dateString);
-      } else {
-        setTempEndDate(dateString);
-      }
-    };
-
-    return (
-      <View style={styles.datePickerContainer}>
-        <View style={styles.datePickerSection}>
-          <Text style={[styles.datePickerTitle, { color: colors.text }]}>Start Date</Text>
-          <View style={styles.datePickerControls}>
-            <View style={styles.pickerRow}>
-              {/* Month Selection */}
-              <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.pickerScroll}
-              >
-                {months.map((month, index) => (
-                  <TouchableOpacity
-                    key={`start-month-${index}`}
-                    style={[
-                      styles.pickerItem,
-                      tempStartDate && new Date(tempStartDate).getMonth() === index ? 
-                        { backgroundColor: colors.primary } : { backgroundColor: colors.card }
-                    ]}
-                    onPress={() => {
-                      const year = tempStartDate ? 
-                        new Date(tempStartDate).getFullYear() : 
-                        new Date().getFullYear();
-                      handleDateSelect(year, index, true);
-                    }}
-                  >
-                    <Text style={[
-                      styles.pickerText,
-                      { color: tempStartDate && new Date(tempStartDate).getMonth() === index ? 
-                        'white' : colors.text }
-                    ]}>
-                      {month.substring(0, 3)}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-            
-            <View style={styles.pickerRow}>
-              {/* Year Selection */}
-              <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.pickerScroll}
-              >
-                {years.map((year) => (
-                  <TouchableOpacity
-                    key={`start-year-${year}`}
-                    style={[
-                      styles.pickerItem,
-                      tempStartDate && new Date(tempStartDate).getFullYear() === year ? 
-                        { backgroundColor: colors.primary } : { backgroundColor: colors.card }
-                    ]}
-                    onPress={() => {
-                      const month = tempStartDate ? 
-                        new Date(tempStartDate).getMonth() : 
-                        0;
-                      handleDateSelect(year, month, true);
-                    }}
-                  >
-                    <Text style={[
-                      styles.pickerText,
-                      { color: tempStartDate && new Date(tempStartDate).getFullYear() === year ? 
-                        'white' : colors.text }
-                    ]}>
-                      {year}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-          </View>
-        </View>
+    if (startDate) {
+      markedDates[startDate] = { 
+        selected: true, 
+        startingDay: true, 
+        color: colors.primary 
+      };
+    }
+    
+    if (endDate) {
+      markedDates[endDate] = { 
+        selected: true, 
+        endingDay: true, 
+        color: colors.primary 
+      };
+    }
+    
+    // If we have both start and end dates, mark days in between
+    if (startDate && endDate && startDate !== endDate) {
+      // Create dates between start and end
+      try {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
         
-        <View style={styles.datePickerSection}>
-          <Text style={[styles.datePickerTitle, { color: colors.text }]}>End Date</Text>
-          <View style={styles.datePickerControls}>
-            <View style={styles.pickerRow}>
-              {/* Month Selection */}
-              <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.pickerScroll}
-              >
-                {months.map((month, index) => (
-                  <TouchableOpacity
-                    key={`end-month-${index}`}
-                    style={[
-                      styles.pickerItem,
-                      tempEndDate && new Date(tempEndDate).getMonth() === index ? 
-                        { backgroundColor: colors.primary } : { backgroundColor: colors.card }
-                    ]}
-                    onPress={() => {
-                      const year = tempEndDate ? 
-                        new Date(tempEndDate).getFullYear() : 
-                        new Date().getFullYear();
-                      handleDateSelect(year, index, false);
-                    }}
-                  >
-                    <Text style={[
-                      styles.pickerText,
-                      { color: tempEndDate && new Date(tempEndDate).getMonth() === index ? 
-                        'white' : colors.text }
-                    ]}>
-                      {month.substring(0, 3)}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-            
-            <View style={styles.pickerRow}>
-              {/* Year Selection */}
-              <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.pickerScroll}
-              >
-                {years.map((year) => (
-                  <TouchableOpacity
-                    key={`end-year-${year}`}
-                    style={[
-                      styles.pickerItem,
-                      tempEndDate && new Date(tempEndDate).getFullYear() === year ? 
-                        { backgroundColor: colors.primary } : { backgroundColor: colors.card }
-                    ]}
-                    onPress={() => {
-                      const month = tempEndDate ? 
-                        new Date(tempEndDate).getMonth() : 
-                        11; // Default to December if no month selected
-                      handleDateSelect(year, month, false);
-                    }}
-                  >
-                    <Text style={[
-                      styles.pickerText,
-                      { color: tempEndDate && new Date(tempEndDate).getFullYear() === year ? 
-                        'white' : colors.text }
-                    ]}>
-                      {year}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.datePickerActions}>
-          <Button
-            title="Clear"
-            onPress={clearDateFilter}
-            variant="outline"
-            style={styles.datePickerButton}
-          />
-          <Button
-            title="Cancel"
-            onPress={cancelDateFilter}
-            variant="secondary"
-            style={styles.datePickerButton}
-          />
-          <Button
-            title="Apply"
-            onPress={applyDateFilter}
-            style={styles.datePickerButton}
-          />
-        </View>
-      </View>
-    );
+        const currentDate = new Date(start);
+        currentDate.setDate(currentDate.getDate() + 1);
+        
+        while (currentDate < end) {
+          const dateString = currentDate.toISOString().split('T')[0];
+          markedDates[dateString] = {
+            selected: true,
+            color: colors.primary
+          };
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+      } catch (e) {
+        console.warn('Error marking date range:', e);
+      }
+    }
+    
+    return markedDates;
   };
 
   const renderOrderDetails = (order: Order) => (
@@ -594,14 +477,14 @@ export default function OrdersScreen() {
           </>
         )}
         {order.special_instructions && (
-          <View style={styles.detailRow}>
+        <View style={styles.detailRow}>
             <Text style={[styles.detailLabel, { color: colors.lightText }]}>Special Instructions:</Text>
             <Text style={[styles.detailValue, { color: colors.text }]}>{order.special_instructions}</Text>
-          </View>
+        </View>
         )}
 
         {order.organs && order.organs.length > 0 && (
-          <View style={styles.detailRow}>
+        <View style={styles.detailRow}>
             <Text style={[styles.detailLabel, { color: colors.lightText }]}>Selected Organs:</Text>
             <Text style={[styles.detailValue, { color: colors.text }]}>{order.organs.join(', ')}</Text>
           </View>
@@ -612,14 +495,14 @@ export default function OrdersScreen() {
           
           <View style={styles.detailRow}>
             <Text style={[styles.detailLabel, { color: colors.lightText }]}>Base Price:</Text>
-            <Text style={[styles.detailValue, { color: colors.text }]}>
+          <Text style={[styles.detailValue, { color: colors.text }]}>
               ${order.price_option?.price.toFixed(2)}
-            </Text>
-          </View>
+          </Text>
+        </View>
 
           {order.extras && order.extras.length > 0 && (
             <>
-              <View style={styles.detailRow}>
+          <View style={styles.detailRow}>
                 <Text style={[styles.detailLabel, { color: colors.lightText }]}>Additional Services:</Text>
                 <View style={styles.extrasContainer}>
                   {order.extras.map((extra, index) => (
@@ -630,7 +513,7 @@ export default function OrdersScreen() {
                       <Text style={[styles.extraPrice, { color: colors.primary }]}>
                         ${extra.price.toFixed(2)}
                       </Text>
-                    </View>
+          </View>
                   ))}
                 </View>
               </View>
@@ -753,23 +636,46 @@ export default function OrdersScreen() {
       ) : user ? (
         <React.Fragment>
           <View style={styles.filterContainer}>
+            <View style={styles.dateFilterRow}>
             <TouchableOpacity 
-              style={[
-                styles.dateFilterButton, 
-                { 
-                  backgroundColor: colors.card,
-                  borderColor: (startDate || endDate) ? colors.primary : colors.border
-                }
-              ]}
-              onPress={() => setDateFilterVisible(true)}
-            >
-              <Ionicons name="calendar-outline" size={20} color={colors.primary} />
-              <Text style={[styles.filterText, { color: colors.text }]}>
-                {startDate || endDate ? 
-                  `${formatDateForDisplay(startDate)} - ${formatDateForDisplay(endDate)}` : 
-                  'All Orders'}
+                style={[styles.dateButton, { borderColor: colors.border, backgroundColor: colors.card }]}
+                onPress={() => {
+                  setSelectingStartDate(true);
+                  setCalendarVisible(true);
+                }}
+              >
+                <Text style={[styles.dateButtonText, { color: colors.text }]}>
+                  {startDate ? formatDate(startDate) : 'Start Date'}
+                </Text>
+              </TouchableOpacity>
+              
+              <Text style={[styles.dateRangeSeparator, { color: colors.lightText }]}>to</Text>
+              
+              <TouchableOpacity
+                style={[styles.dateButton, { borderColor: colors.border, backgroundColor: colors.card }]}
+                onPress={() => {
+                  if (startDate) {
+                    setSelectingStartDate(false);
+                    setCalendarVisible(true);
+                  } else {
+                    Alert.alert('Error', 'Please select a start date first');
+                  }
+                }}
+              >
+                <Text style={[styles.dateButtonText, { color: colors.text }]}>
+                  {endDate ? formatDate(endDate) : 'End Date'}
               </Text>
             </TouchableOpacity>
+              
+              {(startDate || endDate) && (
+                <TouchableOpacity
+                  style={[styles.clearFilterButton, { backgroundColor: colors.card }]}
+                  onPress={clearDateFilter}
+                >
+                  <Text style={[styles.clearFilterText, { color: colors.primary }]}>Clear</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
           {filteredOrders.length > 0 ? (
             <FlatList
@@ -791,37 +697,59 @@ export default function OrdersScreen() {
         renderGuestView()
       )}
 
-      {/* Date Range Picker Modal */}
+      {/* Calendar Modal */}
       <Modal
-        visible={dateFilterVisible}
-        transparent
+        visible={calendarVisible}
+        transparent={true}
         animationType="slide"
-        onRequestClose={cancelDateFilter}
+        onRequestClose={() => setCalendarVisible(false)}
       >
-        <Pressable 
-          style={styles.modalOverlay} 
-          onPress={cancelDateFilter}
-        >
-          <Pressable style={[
-            styles.modalContent, 
-            { backgroundColor: colors.background }
-          ]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>
-                Filter Orders by Date
+        <View style={styles.modalOverlay}>
+          <View style={[styles.calendarContainer, { backgroundColor: colors.background }]}>
+            <View style={styles.calendarHeader}>
+              <Text style={[styles.calendarTitle, { color: colors.text }]}>
+                Select {selectingStartDate ? 'Start' : 'End'} Date
               </Text>
-              <TouchableOpacity onPress={cancelDateFilter}>
-                <Ionicons name="close" size={24} color={colors.text} />
+              <TouchableOpacity onPress={() => setCalendarVisible(false)}>
+                <Text style={[styles.closeButton, { color: colors.primary }]}>Close</Text>
               </TouchableOpacity>
             </View>
-            {renderDatePicker()}
-          </Pressable>
-        </Pressable>
+            
+            <Calendar
+              onDayPress={handleDateSelect}
+              markedDates={getMarkedDates()}
+              markingType="period"
+              theme={{
+                backgroundColor: colors.background,
+                calendarBackground: colors.background,
+                textSectionTitleColor: colors.text,
+                textSectionTitleDisabledColor: colors.lightText,
+                selectedDayBackgroundColor: colors.primary,
+                selectedDayTextColor: '#ffffff',
+                todayTextColor: colors.primary,
+                dayTextColor: colors.text,
+                textDisabledColor: colors.lightText,
+                dotColor: colors.primary,
+                selectedDotColor: '#ffffff',
+                arrowColor: colors.primary,
+                disabledArrowColor: colors.lightText,
+                monthTextColor: colors.text,
+                indicatorColor: colors.primary,
+                textDayFontWeight: '300',
+                textMonthFontWeight: 'bold',
+                textDayHeaderFontWeight: '300',
+                textDayFontSize: 16,
+                textMonthFontSize: 16,
+                textDayHeaderFontSize: 14
+              }}
+            />
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );
 }
-// TODO :change the calender in order page for loged in users to the same like other calends using from and to 
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -851,37 +779,33 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  dateFilterButton: {
-    flex: 1,
+  dateFilterRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 48,
+  },
+  dateButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderRadius: 8,
     borderWidth: 1,
-    paddingHorizontal: 12,
-  },
-  filterIcon: {
-    marginRight: 8,
-  },
-  dateRangeTextContainer: {
     flex: 1,
   },
-  dateRangeLabel: {
-    fontSize: 12,
-    marginBottom: 2,
-  },
-  dateRangeValue: {
+  dateButtonText: {
     fontSize: 14,
-    fontWeight: '500',
+    textAlign: 'center',
   },
-  // TODO : handle gacefully when ticket number is not found
-  // TODO: when entering ticket number my phone keyboard is coming up and cover the ticket number input 
+  dateRangeSeparator: {
+    marginHorizontal: 8,
+    fontSize: 14,
+  },
   clearFilterButton: {
-    marginLeft: 12,
-    padding: 8,
+    marginLeft: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
   },
   clearFilterText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '500',
   },
   listContent: {
@@ -966,133 +890,24 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
   },
-  modalContent: {
+  calendarContainer: {
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    paddingVertical: 20,
-    height: '70%',
+    padding: 16,
   },
-  modalHeader: {
+  calendarHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingBottom: 15,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(0,0,0,0.1)',
+    alignItems: 'center',
+    marginBottom: 16,
   },
-  modalTitle: {
+  calendarTitle: {
     fontSize: 18,
     fontWeight: '600',
   },
-  datePickerContainer: {
-    padding: 20,
-  },
-  datePickerSection: {
-    marginBottom: 20,
-  },
-  datePickerTitle: {
+  closeButton: {
     fontSize: 16,
     fontWeight: '500',
-    marginBottom: 10,
-  },
-  datePickerControls: {
-    borderRadius: 8,
-    overflow: 'hidden',
-  },
-  pickerRow: {
-    marginBottom: 10,
-  },
-  pickerScroll: {
-    paddingVertical: 5,
-  },
-  pickerItem: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    marginRight: 8,
-    borderRadius: 8,
-  },
-  pickerText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  datePickerActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 20,
-  },
-  datePickerButton: {
-    flex: 1,
-    marginHorizontal: 4,
-  },
-  guestContainer: {
-    flex: 1,
-    width: '100%',
-  },
-  guestContent: {
-    flex: 1,
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 40,
-  },
-  guestHeader: {
-    alignItems: 'center',
-    marginBottom: 40,
-    width: '100%',
-    maxWidth: 400,
-  },
-  guestTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginTop: 24,
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  guestSubtitle: {
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 0,
-    lineHeight: 24,
-  },
-  ticketInputContainer: {
-    width: '100%',
-    maxWidth: 400,
-    marginBottom: 20,
-  },
-  ticketInput: {
-    height: 56,
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 20,
-    fontSize: 16,
-    marginBottom: 16,
-    textAlign: 'left',
-    letterSpacing: 1,
-  },
-  lookupButton: {
-    width: '100%',
-    height: 56,
-    borderRadius: 12,
-  },
-  errorText: {
-    fontSize: 14,
-    textAlign: 'center',
-    marginTop: 12,
-    maxWidth: 400,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-  },
-  filterText: {
-    fontSize: 14,
-    marginLeft: 8,
-    flex: 1,
   },
   orderDetailsCard: {
     borderRadius: 12,
@@ -1178,5 +993,69 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: 'rgba(0,0,0,0.05)',
     marginVertical: 8,
+  },
+  guestContainer: {
+    flex: 1,
+    width: '100%',
+  },
+  guestContent: {
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 40,
+  },
+  guestHeader: {
+    alignItems: 'center',
+    marginBottom: 40,
+    width: '100%',
+    maxWidth: 400,
+  },
+  guestTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    marginTop: 24,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  guestSubtitle: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 0,
+    lineHeight: 24,
+  },
+  ticketInputContainer: {
+    width: '100%',
+    maxWidth: 400,
+    marginBottom: 20,
+  },
+  ticketInput: {
+    height: 56,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 20,
+    fontSize: 16,
+    marginBottom: 16,
+    textAlign: 'left',
+    letterSpacing: 1,
+  },
+  lookupButton: {
+    width: '100%',
+    height: 56,
+    borderRadius: 12,
+  },
+  errorText: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 12,
+    maxWidth: 400,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
   },
 }); 

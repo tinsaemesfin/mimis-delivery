@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../../utils/supabase';
 import { Session } from '@supabase/supabase-js';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type AuthContextType = {
   session: Session | null;
@@ -18,15 +19,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Check for existing session in AsyncStorage
+    const checkSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          setSession(session);
+          // Store session in AsyncStorage for persistence
+          await AsyncStorage.setItem('session', JSON.stringify(session));
+        } else {
+          // Check AsyncStorage for any stored session
+          const storedSession = await AsyncStorage.getItem('session');
+          if (storedSession) {
+            setSession(JSON.parse(storedSession));
+          }
+        }
+      } catch (error) {
+        console.error('Error checking session:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkSession();
+
     // Listen for auth state changes
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       setSession(session);
-      setLoading(false);
+      if (session) {
+        await AsyncStorage.setItem('session', JSON.stringify(session));
+      } else {
+        await AsyncStorage.removeItem('session');
+      }
     });
 
-    supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signInWithEmail = async (email: string, password: string) => {
@@ -38,8 +67,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (error) throw error;
       
-      // Set the session immediately
       setSession(data.session);
+      if (data.session) {
+        await AsyncStorage.setItem('session', JSON.stringify(data.session));
+      }
       return data;
     } catch (error) {
       console.error('Email sign in error:', error);
@@ -49,23 +80,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signUpWithEmail = async (email: string, password: string, fullName: string, phoneNumber: string) => {
     try {
-      // Sign up the user with Supabase Auth, storing all user data in metadata
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        phone:phoneNumber,
+        phone: phoneNumber,
         options: {
           data: {
             full_name: fullName,
             phone: phoneNumber
-          }
+          },
+          emailRedirectTo: 'mimisdelivery://auth-callback'
         }
       });
 
       if (error) throw error;
       
-      // No need to create a separate profile entry since we're storing
-      // all user data in the auth.users metadata
+      if (data.session) {
+        setSession(data.session);
+        await AsyncStorage.setItem('session', JSON.stringify(data.session));
+      }
       
       return data;
     } catch (error) {
@@ -77,6 +110,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     try {
       await supabase.auth.signOut();
+      await AsyncStorage.removeItem('session');
+      setSession(null);
     } catch (error) {
       console.error('Sign out error:', error);
       throw error;

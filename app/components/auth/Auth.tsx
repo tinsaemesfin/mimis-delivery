@@ -39,6 +39,9 @@ export default function Auth() {
     } = await supabase.auth.signUp({
       email: email,
       password: password,
+      options: {
+        emailRedirectTo: 'mimisdelivery://auth-callback',
+      }
     })
 
     if (error) Alert.alert(error.message)
