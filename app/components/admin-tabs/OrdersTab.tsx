@@ -14,6 +14,8 @@ import {
   ViewStyle,
   ActivityIndicator,
   PermissionsAndroid,
+  RefreshControl,
+  TextInput,
 } from 'react-native';
 import { Colors } from '../../../constants/Colors';
 import { useColorScheme } from '../../../hooks/useColorScheme';
@@ -53,6 +55,15 @@ interface Order {
     name: string;
     price: number;
   };
+  delivery_fee: number;
+}
+
+interface FilterOptions {
+  customerName: string;
+  animalType: string;
+  startDate: string | null;
+  endDate: string | null;
+  status: string | null;
 }
 
 interface OrdersTabProps {
@@ -199,33 +210,191 @@ const exportToExcel = async (orders: Order[]) => {
 export default function OrdersTab({ orders, setSelectedOrder, openStatusModal, onExport, onEditOrder }: OrdersTabProps) {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme || 'light'];
+  const [refreshing, setRefreshing] = useState(false);
 
+  // Add filter state
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
+  const [filters, setFilters] = useState<FilterOptions>({
+    customerName: '',
+    animalType: '',
+    startDate: null,
+    endDate: null,
+    status: null
+  });
+  const [appliedFilters, setAppliedFilters] = useState<FilterOptions>({
+    customerName: '',
+    animalType: '',
+    startDate: null,
+    endDate: null,
+    status: null
+  });
+
+  // Remove the old date filter states since they're now part of filters
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
-  const [dateFilter, setDateFilter] = useState(false);
-  const [startDate, setStartDate] = useState<string | null>(null);
-  const [endDate, setEndDate] = useState<string | null>(null);
+  const [filteredOrders, setFilteredOrders] = useState(orders);
   const [calendarVisible, setCalendarVisible] = useState(false);
   const [selectingStartDate, setSelectingStartDate] = useState(true);
-  const [filteredOrders, setFilteredOrders] = useState(orders);
   const [orderDetailsVisible, setOrderDetailsVisible] = useState(false);
   const [selectedOrderDetails, setSelectedOrderDetails] = useState<Order | null>(null);
   const [statusDropdownVisible, setStatusDropdownVisible] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
-  // Update filtered orders whenever filters change
+  // Add these state variables after other state declarations
+  const [customerSuggestions, setCustomerSuggestions] = useState<string[]>([]);
+  const [availableAnimals, setAvailableAnimals] = useState<{ id: string; title: string }[]>([]);
+
+  // Add this effect to load animals from the database
   useEffect(() => {
+    const loadAnimals = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('animals')
+          .select('id, title')
+          .eq('is_active', true);
+        
+        if (error) throw error;
+        setAvailableAnimals(data || []);
+      } catch (err) {
+        console.error('Error loading animals:', err);
+      }
+    };
+    
+    loadAnimals();
+  }, []);
+
+  // Update handleCustomerSearch to use orders data
+  const handleCustomerSearch = (text: string) => {
+    setFilters(f => ({ ...f, customerName: text }));
+    if (text.length >= 2) {
+      const matches = [...new Set(orders
+        .map(order => order.customerName)
+        .filter(name => 
+          name.toLowerCase().includes(text.toLowerCase())
+        ))];
+      setCustomerSuggestions(matches);
+    } else {
+      setCustomerSuggestions([]);
+    }
+  };
+
+  // Update the handleDateSelect function
+  const handleDateSelect = (day: DateData) => {
+    const selectedDate = day.dateString;
+    
+    if (selectingStartDate) {
+      setFilters(f => ({ 
+        ...f, 
+        startDate: selectedDate,
+        // If we're selecting start date, also set it as end date for single-day filter
+        endDate: selectedDate 
+      }));
+      setSelectingStartDate(false);
+    } else {
+      // If selecting end date and it's before start date, swap them
+      if (filters.startDate && selectedDate < filters.startDate) {
+        setFilters(f => ({ 
+          ...f, 
+          endDate: filters.startDate, 
+          startDate: selectedDate 
+        }));
+      } else {
+        setFilters(f => ({ ...f, endDate: selectedDate }));
+      }
+      setCalendarVisible(false);
+    }
+  };
+
+  // Update the getMarkedDates function to handle single-day selection
+  const getMarkedDates = () => {
+    const markedDates: any = {};
+    
+    if (filters.startDate) {
+      if (filters.startDate === filters.endDate) {
+        // Single day selection
+        markedDates[filters.startDate] = { 
+          selected: true,
+          color: colors.primary,
+          textColor: 'white'
+        };
+      } else {
+        // Start date
+        markedDates[filters.startDate] = { 
+          selected: true, 
+          startingDay: true, 
+          color: colors.primary,
+          textColor: 'white'
+        };
+        
+        // If we have an end date that's different from start date
+        if (filters.endDate && filters.endDate !== filters.startDate) {
+          // End date
+          markedDates[filters.endDate] = { 
+            selected: true, 
+            endingDay: true, 
+            color: colors.primary,
+            textColor: 'white'
+          };
+          
+          // Mark days in between
+          try {
+            const start = new Date(filters.startDate);
+            const end = new Date(filters.endDate);
+            
+            const currentDate = new Date(start);
+            currentDate.setDate(currentDate.getDate() + 1);
+            
+            while (currentDate < end) {
+              const dateString = currentDate.toISOString().split('T')[0];
+              markedDates[dateString] = {
+                selected: true,
+                color: colors.primary,
+                textColor: 'white'
+              };
+              currentDate.setDate(currentDate.getDate() + 1);
+            }
+          } catch (e) {
+            console.warn('Error marking date range:', e);
+          }
+        }
+      }
+    }
+    
+    return markedDates;
+  };
+
+  // Update the applyFilters function to handle single-day filtering
+  const applyFilters = () => {
+    setAppliedFilters(filters);
     let results = [...orders];
     
+    // Apply customer name filter
+    if (filters.customerName) {
+      results = results.filter(order => 
+        order.customerName.toLowerCase().includes(filters.customerName.toLowerCase())
+      );
+    }
+    
+    // Apply animal type filter
+    if (filters.animalType) {
+      results = results.filter(order => 
+        order.animalType?.toLowerCase().includes(filters.animalType.toLowerCase())
+      );
+    }
+    
     // Apply status filter
-    if (statusFilter) {
-      results = results.filter(order => order.status === statusFilter);
+    if (filters.status) {
+      results = results.filter(order => order.status === filters.status);
     }
     
     // Apply date filter
-    if (dateFilter && startDate && endDate) {
+    if (filters.startDate) {
       try {
-        const start = parseISO(startDate);
-        const end = parseISO(endDate);
+        const start = parseISO(filters.startDate);
+        const end = filters.endDate ? parseISO(filters.endDate) : start;
+        
+        // Set the time to start of day for start date and end of day for end date
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
         
         results = results.filter(order => {
           try {
@@ -242,33 +411,97 @@ export default function OrdersTab({ orders, setSelectedOrder, openStatusModal, o
     }
     
     setFilteredOrders(results);
-  }, [orders, statusFilter, dateFilter, startDate, endDate]);
-
-  // Handle date selection in calendar
-  const handleDateSelect = (day: DateData) => {
-    const selectedDate = day.dateString;
-    
-    if (selectingStartDate) {
-      setStartDate(selectedDate);
-      setSelectingStartDate(false);
-    } else {
-      // Ensure endDate is after startDate
-      if (startDate && selectedDate < startDate) {
-        setEndDate(startDate);
-        setStartDate(selectedDate);
-      } else {
-        setEndDate(selectedDate);
-      }
-      setCalendarVisible(false);
-      setDateFilter(true);
-    }
+    setFilterModalVisible(false);
   };
 
-  // Clear date filter
-  const clearDateFilter = () => {
-    setStartDate(null);
-    setEndDate(null);
-    setDateFilter(false);
+  // Add this function to clear filters
+  const clearFilters = () => {
+    const emptyFilters = {
+      customerName: '',
+      animalType: '',
+      startDate: null,
+      endDate: null,
+      status: null
+    };
+    setFilters(emptyFilters);
+    setAppliedFilters(emptyFilters);
+    setFilteredOrders(orders);
+  };
+
+  // Update useEffect for filters
+  useEffect(() => {
+    applyFilters();
+  }, [orders]); // Only reapply when orders change
+
+  // Add this function to remove a specific filter
+  const removeFilter = (key: keyof FilterOptions) => {
+    const newFilters = { ...appliedFilters, [key]: '' };
+    setFilters(newFilters);
+    setAppliedFilters(newFilters);
+    applyFilters();
+  };
+
+  // Update the renderFilterBadges function
+  const renderFilterBadges = () => {
+    return (
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        style={styles.filterBadgesContainer}
+        contentContainerStyle={styles.filterBadgesContent}
+      >
+        {appliedFilters.customerName && (
+          <TouchableOpacity 
+            style={[styles.filterBadge, { backgroundColor: colors.primary + '20' }]}
+            onPress={() => removeFilter('customerName')}
+          >
+            <Text style={[styles.filterBadgeText, { color: colors.primary }]}>
+              Customer: {appliedFilters.customerName}
+            </Text>
+            <Ionicons name="close-circle" size={16} color={colors.primary} />
+          </TouchableOpacity>
+        )}
+        
+        {appliedFilters.animalType && (
+          <TouchableOpacity 
+            style={[styles.filterBadge, { backgroundColor: colors.primary + '20' }]}
+            onPress={() => removeFilter('animalType')}
+          >
+            <Text style={[styles.filterBadgeText, { color: colors.primary }]}>
+              Animal: {appliedFilters.animalType}
+            </Text>
+            <Ionicons name="close-circle" size={16} color={colors.primary} />
+          </TouchableOpacity>
+        )}
+        
+        {appliedFilters.status && (
+          <TouchableOpacity 
+            style={[styles.filterBadge, { backgroundColor: colors.primary + '20' }]}
+            onPress={() => removeFilter('status')}
+          >
+            <Text style={[styles.filterBadgeText, { color: colors.primary }]}>
+              Status: {appliedFilters.status}
+            </Text>
+            <Ionicons name="close-circle" size={16} color={colors.primary} />
+          </TouchableOpacity>
+        )}
+        
+        {appliedFilters.startDate && appliedFilters.endDate && (
+          <TouchableOpacity 
+            style={[styles.filterBadge, { backgroundColor: colors.primary + '20' }]}
+            onPress={() => {
+              setFilters(f => ({ ...f, startDate: null, endDate: null }));
+              applyFilters();
+            }}
+          >
+            <Text style={[styles.filterBadgeText, { color: colors.primary }]}>
+              {formatDate(appliedFilters.startDate)} - {formatDate(appliedFilters.endDate)}
+            </Text>
+            <Ionicons name="close-circle" size={16} color={colors.primary} />
+          </TouchableOpacity>
+        )}
+      </ScrollView>
+    );
   };
 
   // Format date for display
@@ -302,7 +535,6 @@ export default function OrdersTab({ orders, setSelectedOrder, openStatusModal, o
   // Open order details modal
   const showOrderDetails = (order: Order) => {
     setSelectedOrderDetails(order);
-    setSelectedOrder(order);
     setOrderDetailsVisible(true);
   };
 
@@ -341,52 +573,6 @@ export default function OrdersTab({ orders, setSelectedOrder, openStatusModal, o
     } finally {
       setIsUpdatingStatus(false);
     }
-  };
-
-  // Prepare marked dates for calendar
-  const getMarkedDates = () => {
-    const markedDates: any = {};
-    
-    if (startDate) {
-      markedDates[startDate] = { 
-        selected: true, 
-        startingDay: true, 
-        color: colors.primary 
-      };
-    }
-    
-    if (endDate) {
-      markedDates[endDate] = { 
-        selected: true, 
-        endingDay: true, 
-        color: colors.primary 
-      };
-    }
-    
-    // If we have both start and end dates, mark days in between
-    if (startDate && endDate && startDate !== endDate) {
-      // Create dates between start and end
-      try {
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        
-        const currentDate = new Date(start);
-        currentDate.setDate(currentDate.getDate() + 1);
-        
-        while (currentDate < end) {
-          const dateString = currentDate.toISOString().split('T')[0];
-          markedDates[dateString] = {
-            selected: true,
-            color: colors.primary
-          };
-          currentDate.setDate(currentDate.getDate() + 1);
-        }
-      } catch (e) {
-        console.warn('Error marking date range:', e);
-      }
-    }
-    
-    return markedDates;
   };
 
   // Add handleExport function inside the component
@@ -451,104 +637,161 @@ export default function OrdersTab({ orders, setSelectedOrder, openStatusModal, o
     }
   };
 
+  // Update the renderPriceBreakdown function
+  const renderPriceBreakdown = (order: Order) => {
+    const basePrice = order.price_option?.price || 0;
+    const extrasTotal = order.extras?.reduce((sum: number, extra: { price: number }) => sum + extra.price, 0) || 0;
+    const deliveryFee = order.delivery_fee || 0; // Ensure we have a value even if undefined
+    
+    return (
+      <View style={styles.priceBreakdown}>
+        <View style={styles.priceRow}>
+          <Text style={styles.priceLabel}>Base Price:</Text>
+          <Text style={styles.priceValue}>${basePrice.toFixed(2)}</Text>
+        </View>
+        
+        {order.extras && order.extras.length > 0 && (
+          <>
+            <Text style={styles.priceLabel}>Additional Services:</Text>
+            {order.extras.map((extra, index) => (
+              <View key={index} style={styles.priceRow}>
+                <Text style={styles.priceLabel}>- {extra.title}:</Text>
+                <Text style={styles.priceValue}>${extra.price.toFixed(2)}</Text>
+              </View>
+            ))}
+          </>
+        )}
+        
+        {/* Always show delivery fee */}
+        <View style={styles.priceRow}>
+          <Text style={styles.priceLabel}>Delivery Fee:</Text>
+          <Text style={styles.priceValue}>${deliveryFee.toFixed(2)}</Text>
+        </View>
+        
+        <View style={[styles.priceRow, styles.totalRow]}>
+          <Text style={styles.totalLabel}>Total:</Text>
+          <Text style={styles.totalValue}>${(basePrice + extrasTotal + deliveryFee).toFixed(2)}</Text>
+        </View>
+      </View>
+    );
+  };
+
+  // Add onRefresh function
+  const onRefresh = React.useCallback(async () => {
+    setRefreshing(true);
+    try {
+      // Fetch fresh orders from Supabase
+      const { data, error } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          animal_size_option:animal_size_options(
+            id,
+            animal:animals(
+              id,
+              title
+            ),
+            size:sizes(
+              id,
+              name
+            )
+          ),
+          cutting_style:cutting_styles(
+            id,
+            title
+          ),
+          price_option:price_options(
+            id,
+            name,
+            price
+          )
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      // Fetch extras for orders that have them
+      const ordersWithExtras = await Promise.all(
+        data.map(async (order) => {
+          if (order.extras && order.extras.length > 0) {
+            const { data: extrasData, error: extrasError } = await supabase
+              .from('extras')
+              .select('id, title, price')
+              .in('id', order.extras);
+
+            if (extrasError) {
+              console.error('Error fetching extras:', extrasError);
+              return order;
+            }
+
+            return {
+              ...order,
+              extras: extrasData
+            };
+          }
+          return order;
+        })
+      );
+
+      // Transform and update orders
+      const formattedOrders = ordersWithExtras.map(order => ({
+        id: order.id,
+        customerName: order.customer_name || 'Unknown',
+        date: order.created_at,
+        status: order.status || 'Pending',
+        total: (order.price_option?.price || 0) + 
+               (order.extras?.reduce((sum: number, extra: { price: number }) => sum + extra.price, 0) || 0) +
+               (order.delivery_fee || 0),
+        animalType: order.animal_size_option?.animal?.title || 'Not specified',
+        size: order.animal_size_option?.size?.name || 'Not specified',
+        cutStyle: order.cutting_style?.title || 'Not specified',
+        divided: order.divided ? 'Yes' : 'No',
+        phoneNumber: order.phone_number || '',
+        address: order.address || '',
+        user_id: order.user_id,
+        order_ticket: order.order_ticket,
+        created_at: order.created_at,
+        special_instructions: order.special_instructions,
+        organs: order.organs,
+        extras: order.extras,
+        price_option: order.price_option,
+        delivery_fee: order.delivery_fee || 0
+      }));
+
+      // Update the orders through the prop callback
+      setSelectedOrder(null); // Clear any selected order
+      setFilteredOrders(formattedOrders);
+    } catch (error) {
+      console.error('Error refreshing orders:', error);
+      Alert.alert('Error', 'Failed to refresh orders. Please try again.');
+    } finally {
+      setRefreshing(false);
+    }
+  }, [setSelectedOrder]);
+
   return (
     <View style={styles.tabContent}>
       <View style={styles.filterSection}>
         <View style={styles.headerRow}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Order History</Text>
+          <View style={styles.headerButtons}>
+            <TouchableOpacity
+              style={[styles.filterButton, { backgroundColor: colors.primary }]}
+              onPress={() => setFilterModalVisible(true)}
+            >
+              <Ionicons name="filter" size={24} color="white" />
+            </TouchableOpacity>
             <Button 
-              title="Export to Excel" 
-            onPress={handleExport}
+              title="Export" 
+              onPress={handleExport}
               style={styles.exportButton}
               variant="primary"
             />
-        </View>
-        
-        <View style={styles.filterRow}>
-          <Text style={[styles.filterLabel, { color: colors.text }]}>Filter by Status:</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.statusFilterScroll}>
-            <TouchableOpacity
-              style={[
-                styles.statusFilterButton,
-                statusFilter === null && styles.activeFilter,
-                { borderColor: colors.border }
-              ]}
-              onPress={() => setStatusFilter(null)}
-            >
-              <Text style={[
-                styles.statusFilterText,
-                statusFilter === null && styles.activeFilterText,
-                { color: statusFilter === null ? 'white' : colors.text }
-              ]}>
-                All
-              </Text>
-            </TouchableOpacity>
-            
-            {['pending', 'confirmed', 'processing', 'ready', 'delivered', 'cancelled'].map((status) => (
-              <TouchableOpacity
-                key={status}
-                style={[
-                  styles.statusFilterButton,
-                  statusFilter === status && styles.activeFilter,
-                  { borderColor: colors.border }
-                ]}
-                onPress={() => setStatusFilter(status)}
-              >
-                <Text style={[
-                  styles.statusFilterText,
-                  statusFilter === status && styles.activeFilterText,
-                  { color: statusFilter === status ? 'white' : colors.text }
-                ]}>
-                  {status.charAt(0).toUpperCase() + status.slice(1)}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-        
-        <View style={styles.filterRow}>
-          <Text style={[styles.filterLabel, { color: colors.text }]}>Filter by Date:</Text>
-          <View style={styles.dateFilterRow}>
-            <TouchableOpacity
-              style={[styles.dateButton, { borderColor: colors.border, backgroundColor: colors.card }]}
-              onPress={() => {
-                setSelectingStartDate(true);
-                setCalendarVisible(true);
-              }}
-            >
-              <Text style={[styles.dateButtonText, { color: colors.text }]}>
-                {startDate ? formatDate(startDate) : 'Start Date'}
-              </Text>
-            </TouchableOpacity>
-            
-            <Text style={[styles.dateRangeSeparator, { color: colors.lightText }]}>to</Text>
-            
-            <TouchableOpacity
-              style={[styles.dateButton, { borderColor: colors.border, backgroundColor: colors.card }]}
-              onPress={() => {
-                if (startDate) {
-                  setSelectingStartDate(false);
-                  setCalendarVisible(true);
-                } else {
-                  Alert.alert('Error', 'Please select a start date first');
-                }
-              }}
-            >
-              <Text style={[styles.dateButtonText, { color: colors.text }]}>
-                {endDate ? formatDate(endDate) : 'End Date'}
-              </Text>
-            </TouchableOpacity>
-            
-            {dateFilter && (
-              <TouchableOpacity
-                style={[styles.clearFilterButton, { backgroundColor: colors.card }]}
-                onPress={clearDateFilter}
-              >
-                <Text style={[styles.clearFilterText, { color: colors.primary }]}>Clear</Text>
-              </TouchableOpacity>
-            )}
           </View>
         </View>
+        
+        {/* Render filter badges */}
+        {renderFilterBadges()}
       </View>
       
       <FlatList
@@ -577,6 +820,14 @@ export default function OrdersTab({ orders, setSelectedOrder, openStatusModal, o
           </TouchableOpacity>
         )}
         contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
+          />
+        }
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Text style={[styles.emptyText, { color: colors.lightText }]}>
@@ -809,6 +1060,18 @@ export default function OrdersTab({ orders, setSelectedOrder, openStatusModal, o
                         </View>
                       </View>
 
+                      <View style={styles.detailRow}>
+                        <View style={styles.detailItem}>
+                          <Ionicons name="car-outline" size={20} color={colors.primary} />
+                          <View style={styles.detailTextContainer}>
+                            <Text style={[styles.detailLabel, { color: colors.lightText }]}>Delivery Fee</Text>
+                            <Text style={[styles.detailValue, { color: colors.text }]}>
+                              {formatCurrency(selectedOrderDetails.delivery_fee)}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+
                       {selectedOrderDetails.extras && selectedOrderDetails.extras.length > 0 && (
                         <View style={styles.detailRow}>
                           <View style={styles.detailItem}>
@@ -899,6 +1162,183 @@ export default function OrdersTab({ orders, setSelectedOrder, openStatusModal, o
           </View>
         </View>
       </Modal>
+
+      {/* Updated Filter Modal */}
+      <Modal
+        visible={filterModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setFilterModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.filterModalContent, { backgroundColor: colors.background }]}>
+            <View style={styles.filterModalHeader}>
+              <Text style={[styles.filterModalTitle, { color: colors.text }]}>Filter Orders</Text>
+              <TouchableOpacity 
+                style={styles.modalCloseButton}
+                onPress={() => setFilterModalVisible(false)}
+              >
+                <Ionicons name="close" size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.filterModalBody}>
+              {/* Customer Name Filter */}
+              <View style={styles.filterInputContainer}>
+                <Text style={[styles.filterInputLabel, { color: colors.text }]}>Customer Name</Text>
+                <TextInput
+                  style={[styles.filterInput, { 
+                    backgroundColor: colors.card,
+                    color: colors.text,
+                    borderColor: colors.border
+                  }]}
+                  value={filters.customerName}
+                  onChangeText={handleCustomerSearch}
+                  placeholder="Search by customer name"
+                  placeholderTextColor={colors.lightText}
+                />
+                {customerSuggestions.length > 0 && (
+                  <View style={[styles.suggestionsContainer, { backgroundColor: colors.card }]}>
+                    {customerSuggestions.map((name, index) => (
+                      <TouchableOpacity
+                        key={index}
+                        style={styles.suggestionItem}
+                        onPress={() => {
+                          setFilters(f => ({ ...f, customerName: name }));
+                          setCustomerSuggestions([]);
+                        }}
+                      >
+                        <Text style={[styles.suggestionText, { color: colors.text }]}>{name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </View>
+
+              {/* Animal Type Select */}
+              <View style={styles.filterInputContainer}>
+                <Text style={[styles.filterInputLabel, { color: colors.text }]}>Animal Type</Text>
+                <View style={styles.animalTypeContainer}>
+                  {availableAnimals.map((animal) => (
+                    <TouchableOpacity
+                      key={animal.id}
+                      style={[
+                        styles.animalTypeButton,
+                        filters.animalType === animal.title && styles.activeAnimalType
+                      ]}
+                      onPress={() => setFilters(f => ({ 
+                        ...f, 
+                        animalType: animal.title === f.animalType ? '' : animal.title 
+                      }))}
+                    >
+                      <Text style={[
+                        styles.animalTypeText,
+                        filters.animalType === animal.title && styles.activeAnimalTypeText
+                      ]}>
+                        {animal.title}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Status Filter */}
+              <View style={styles.filterInputContainer}>
+                <Text style={[styles.filterInputLabel, { color: colors.text }]}>Status</Text>
+                <View style={styles.statusButtonsContainer}>
+                  {[
+                    { value: 'pending', color: '#FFA000' },
+                    { value: 'confirmed', color: '#2196F3' },
+                    { value: 'processing', color: '#9C27B0' },
+                    { value: 'ready', color: '#4CAF50' },
+                    { value: 'delivered', color: '#4CAF50' },
+                    { value: 'cancelled', color: '#F44336' }
+                  ].map((status) => (
+                    <TouchableOpacity
+                      key={status.value}
+                      style={[
+                        styles.filterStatusButton,
+                        filters.status === status.value && { backgroundColor: status.color + '10' }
+                      ]}
+                      onPress={() => setFilters(f => ({ 
+                        ...f, 
+                        status: status.value === f.status ? null : status.value 
+                      }))}
+                    >
+                      <View style={[styles.statusDot, { backgroundColor: status.color }]} />
+                      <Text style={[
+                        styles.filterStatusText,
+                        { color: filters.status === status.value ? status.color : colors.text }
+                      ]}>
+                        {status.value.charAt(0).toUpperCase() + status.value.slice(1)}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Date Range Filter */}
+              <View style={styles.filterInputContainer}>
+                <Text style={[styles.filterInputLabel, { color: colors.text }]}>Date Range</Text>
+                <View style={styles.dateFilterRow}>
+                  <TouchableOpacity
+                    style={[styles.dateButton, { backgroundColor: colors.card }]}
+                    onPress={() => {
+                      setSelectingStartDate(true);
+                      setCalendarVisible(true);
+                    }}
+                  >
+                    <Ionicons name="calendar-outline" size={20} color={colors.primary} />
+                    <Text style={[styles.dateButtonText, { color: colors.text }]}>
+                      {filters.startDate ? formatDate(filters.startDate) : 'Select Date'}
+                    </Text>
+                  </TouchableOpacity>
+                  
+                  {filters.startDate !== filters.endDate && (
+                    <>
+                      <Text style={styles.dateRangeSeparator}>to</Text>
+                      
+                      <TouchableOpacity
+                        style={[styles.dateButton, { backgroundColor: colors.card }]}
+                        onPress={() => {
+                          if (filters.startDate) {
+                            setSelectingStartDate(false);
+                            setCalendarVisible(true);
+                          } else {
+                            Alert.alert('Error', 'Please select a start date first');
+                          }
+                        }}
+                      >
+                        <Ionicons name="calendar-outline" size={20} color={colors.primary} />
+                        <Text style={[styles.dateButtonText, { color: colors.text }]}>
+                          {filters.endDate ? formatDate(filters.endDate) : 'End Date'}
+                        </Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
+                </View>
+              </View>
+            </ScrollView>
+
+            <View style={styles.filterModalFooter}>
+              <TouchableOpacity
+                style={[styles.filterModalButton, styles.filterModalClearButton]}
+                onPress={clearFilters}
+              >
+                <Ionicons name="trash-outline" size={20} color={colors.text} />
+                <Text style={styles.filterModalButtonText}>Clear All</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.filterModalButton, styles.filterModalApplyButton]}
+                onPress={applyFilters}
+              >
+                <Ionicons name="checkmark" size={20} color="white" />
+                <Text style={[styles.filterModalButtonText, { color: 'white' }]}>Apply Filters</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -950,6 +1390,7 @@ const styles = StyleSheet.create({
   dateFilterRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
   dateButton: {
     paddingHorizontal: 16,
@@ -1013,7 +1454,7 @@ const styles = StyleSheet.create({
   },
   statusText: {
     color: 'white',
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '600',
     textTransform: 'capitalize',
   },
@@ -1206,9 +1647,8 @@ const styles = StyleSheet.create({
   },
   modalCloseButton: {
     padding: 8,
-    borderRadius: 8,
-    marginLeft: 8,
-  } as ViewStyle,
+    borderRadius: 20,
+  },
   disabledSelector: {
     opacity: 0.7,
   },
@@ -1275,5 +1715,206 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: '500',
     marginLeft: 4,
+  },
+  priceBreakdown: {
+    marginTop: 8,
+    padding: 12,
+    borderRadius: 8,
+  },
+  priceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  priceLabel: {
+    fontSize: 14,
+    color: '#666',
+    flex: 1,
+  },
+  priceValue: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  totalRow: {
+    marginTop: 12,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.1)',
+  },
+  totalLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  totalValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  filterButton: {
+    padding: 12,
+    borderRadius: 12,
+    marginRight: 8,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  filterModalContent: {
+    flex: 1,
+    marginTop: 50,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    backgroundColor: 'white',
+  },
+  filterModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEEEEE',
+  },
+  filterModalTitle: {
+    fontSize: 24,
+    fontWeight: '600',
+  },
+  filterInputContainer: {
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEEEEE',
+  },
+  filterInputLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 12,
+  },
+  filterInput: {
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    fontSize: 16,
+  },
+  suggestionsContainer: {
+    marginTop: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    maxHeight: 200,
+  },
+  suggestionItem: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEEEEE',
+  },
+  suggestionText: {
+    fontSize: 16,
+  },
+  animalTypeContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -4,
+  },
+  animalTypeButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#EEEEEE',
+    margin: 4,
+  },
+  activeAnimalType: {
+    backgroundColor: '#D50000',
+    borderColor: '#D50000',
+  },
+  animalTypeText: {
+    fontSize: 14,
+    color: '#000000',
+  },
+  activeAnimalTypeText: {
+    color: 'white',
+  },
+  statusButtonsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -4,
+  },
+  filterStatusButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    margin: 4,
+    backgroundColor: 'white',
+    borderWidth: 1,
+    borderColor: '#EEEEEE',
+    flex: 1,
+    minWidth: '45%',
+  },
+  filterStatusText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  filterModalFooter: {
+    flexDirection: 'row',
+    padding: 20,
+    gap: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#EEEEEE',
+  },
+  filterModalButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 8,
+    gap: 8,
+  },
+  filterModalClearButton: {
+    backgroundColor: '#F5F5F5',
+  },
+  filterModalApplyButton: {
+    backgroundColor: '#D50000',
+  },
+  filterModalButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  filterBadgesContainer: {
+    flexDirection: 'row',
+    padding: 8,
+  },
+  filterBadgesContent: {
+    alignItems: 'center',
+  },
+  filterBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
+    borderRadius: 16,
+    marginRight: 8,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+  },
+  filterBadgeText: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginRight: 4,
+    color: '#000',
+  },
+  filterModalBody: {
+    flex: 1,
   },
 }); 

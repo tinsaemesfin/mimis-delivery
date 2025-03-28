@@ -53,6 +53,7 @@ interface Order {
     name: string;
     price: number;
   };
+  delivery_fee: number;  // Changed from optional to required
 }
 
 export default function AdminOrdersScreen() {
@@ -312,10 +313,11 @@ export default function AdminOrdersScreen() {
       
       // Transform data to match our Order interface
       const formattedOrders: Order[] = ordersWithExtras.map(order => {
-        // Calculate total including extras
+        // Calculate total including extras and delivery fee
         const basePrice = order.price_option?.price || 0;
         const extrasTotal = order.extras?.reduce((sum: number, extra: { price: number }) => sum + extra.price, 0) || 0;
-        const total = basePrice + extrasTotal;
+        const deliveryFee = order.delivery_fee || 0;
+        const total = basePrice + extrasTotal + deliveryFee;
 
         return {
           id: order.id,
@@ -335,7 +337,8 @@ export default function AdminOrdersScreen() {
           special_instructions: order.special_instructions,
           organs: order.organs,
           extras: order.extras,
-          price_option: order.price_option
+          price_option: order.price_option,
+          delivery_fee: order.delivery_fee || 0 // Add delivery fee to the returned order object
         };
       });
       
@@ -697,7 +700,8 @@ export default function AdminOrdersScreen() {
         special_instructions: updatedOrderWithExtras.special_instructions,
         organs: updatedOrderWithExtras.organs,
         extras: updatedOrderWithExtras.extras,
-        price_option: updatedOrderWithExtras.price_option
+        price_option: updatedOrderWithExtras.price_option,
+        delivery_fee: updatedOrderWithExtras.delivery_fee || 0 // Add delivery fee to the returned order object
       };
       
       // Update the orders state

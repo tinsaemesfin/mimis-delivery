@@ -19,6 +19,7 @@ import { useColorScheme } from '../../hooks/useColorScheme';
 import { Ionicons } from '@expo/vector-icons';
 import Button from '../../components/Button';
 import { createShadow } from '@/utils/styling';
+import { supabase } from '@/utils/supabase';
 
 // Import tab components
 import AnimalsTab from '../components/admin-tabs/AnimalsTab';
@@ -29,6 +30,7 @@ import PriceOptionsTab from '../components/admin-tabs/PriceOptionsTab';
 import OrgansTab from '../components/admin-tabs/OrgansTab';
 import ExtrasTab from '../components/admin-tabs/ExtrasTab';
 import DeliveryFeeTab from '../components/admin-tabs/DeliveryFeeTab';
+import AnimalSizesTab from '../components/admin-tabs/AnimalSizesTab';
 
 // Define types for our data - These need to match the component expectations
 type Animal = {
@@ -225,7 +227,39 @@ const initialExtras: Extra[] = [
   },
 ];
 
-type AdminTab = 'animals' | 'cuttingStyles' | 'orders' | 'dates' | 'priceOptions' | 'organs' | 'extras' | 'deliveryFee';
+// Initial sizes data
+const initialSizes = [
+  { id: '1', name: 'Small', description: 'Small size suitable for small gatherings' },
+  { id: '2', name: 'Medium', description: 'Medium size suitable for family gatherings' },
+  { id: '3', name: 'Large', description: 'Large size suitable for large gatherings' },
+];
+
+// Initial animal size options data
+const initialAnimalSizeOptions = [
+  {
+    id: '1',
+    animalId: '1', // Lamb
+    sizeId: '1', // Small
+    description: 'Small lamb suitable for small gatherings',
+    isActive: true
+  },
+  {
+    id: '2',
+    animalId: '1', // Lamb
+    sizeId: '2', // Medium
+    description: 'Medium lamb suitable for family gatherings',
+    isActive: true
+  },
+  {
+    id: '3',
+    animalId: '2', // Sheep
+    sizeId: '3', // Large
+    description: 'Large sheep suitable for large gatherings',
+    isActive: true
+  }
+];
+
+type AdminTab = 'animals' | 'cuttingStyles' | 'orders' | 'dates' | 'priceOptions' | 'organs' | 'extras' | 'deliveryFee' | 'animalSizes';
 
 // This comment is a temporary fix for type compatibility issues.
 // There are conflicting type definitions between component files and this admin.tsx file.
@@ -283,16 +317,6 @@ export default function AdminScreen() {
       setFilteredOrders(orders);
     }
   }, [dateFilterVisible, orders, startDate, endDate]);
-
-  // Add effect to defer tab initialization
-  useEffect(() => {
-    // This ensures the root layout is mounted before any operations
-    const timer = setTimeout(() => {
-      // The component is now mounted
-    }, 0);
-    
-    return () => clearTimeout(timer);
-  }, []);
 
   // Function to handle adding a new animal
   const handleAddAnimal = () => {
@@ -652,6 +676,25 @@ export default function AdminScreen() {
               Delivery Fee
             </Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.tab,
+              activeTab === 'animalSizes' && { ...styles.activeTab, borderBottomColor: colors.primary }
+            ]}
+            onPress={() => {
+              setTimeout(() => setActiveTab('animalSizes'), 0);
+            }}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                activeTab === 'animalSizes' && { ...styles.activeTabText, color: colors.primary }
+              ]}
+            >
+              Animal Sizes
+            </Text>
+          </TouchableOpacity>
           
         </ScrollView>
       </View>
@@ -716,6 +759,7 @@ export default function AdminScreen() {
             setDeliveryFee={setDeliveryFee}
           />
         )}
+        {activeTab === 'animalSizes' && <AnimalSizesTab />}
       </View>
       
       {/* Status update modal */}

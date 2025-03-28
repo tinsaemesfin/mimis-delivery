@@ -87,6 +87,7 @@ export default function AnimalsTab({ animals: initialAnimals, setAnimals: setPar
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showActiveOnly, setShowActiveOnly] = useState(false);
+  const [sizes, setSizes] = useState<{ id: string; name: string }[]>([]);
   
   const [modalVisible, setModalVisible] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -182,6 +183,34 @@ export default function AnimalsTab({ animals: initialAnimals, setAnimals: setPar
     }
   };
   
+  // Add function to fetch sizes
+  const fetchSizes = async () => {
+    try {
+      console.log('Fetching sizes...');
+      const { data, error } = await supabase
+        .from('sizes')
+        .select('*');
+
+      if (error) throw error;
+
+      if (data) {
+        console.log('Fetched sizes:', data);
+        setSizes(data.map(size => ({
+          id: size.id,
+          name: size.name
+        })));
+      }
+    } catch (error) {
+      console.error('Error fetching sizes:', error);
+    }
+  };
+  
+  // Update useEffect to fetch sizes
+  useEffect(() => {
+    fetchAnimals();
+    fetchSizes();
+  }, []);
+  
   // Update addAnimal function
   const addAnimal = async () => {
     if (newAnimalName.trim() === '') {
@@ -200,6 +229,7 @@ export default function AnimalsTab({ animals: initialAnimals, setAnimals: setPar
         imageUrl = await uploadImage(selectedImage, path);
       }
 
+      console.log('Creating new animal...');
       const newAnimal = {
         title: newAnimalName.trim(),
         description: newAnimalDescription.trim(),
@@ -207,14 +237,49 @@ export default function AnimalsTab({ animals: initialAnimals, setAnimals: setPar
         image_url: imageUrl,
       };
 
-      const { data, error } = await supabase
+      // Insert the new animal
+      const { data: animalData, error: animalError } = await supabase
         .from('animals')
         .insert([newAnimal])
-        .select();
+        .select()
+        .single();
 
-      if (error) throw error;
+      if (animalError) {
+        console.error('Error creating animal:', animalError);
+        throw animalError;
+      }
 
-      Alert.alert('Success', 'Animal added successfully');
+      console.log('Created animal:', animalData);
+      console.log('Current sizes:', sizes);
+
+      // Create animal size options for each size
+      if (sizes.length > 0) {
+        console.log('Creating animal size options...');
+        const animalSizeOptions = sizes.map(size => ({
+          animal_id: animalData.id,
+          size_id: size.id,
+          description: `${size.name} ${newAnimalName.trim()}`,
+          is_active: true
+        }));
+
+        console.log('Animal size options to create:', animalSizeOptions);
+
+        const { data: optionsData, error: optionsError } = await supabase
+          .from('animal_size_options')
+          .insert(animalSizeOptions)
+          .select();
+
+        if (optionsError) {
+          console.error('Error creating animal size options:', optionsError);
+          throw optionsError;
+        }
+
+        console.log('Created animal size options:', optionsData);
+      } else {
+        console.warn('No sizes found to create animal size options');
+      }
+
+      Alert.alert('Success', 'Animal and size options added successfully');
       setNewAnimalName('');
       setNewAnimalDescription('');
       setSelectedImage(null);
@@ -223,8 +288,8 @@ export default function AnimalsTab({ animals: initialAnimals, setAnimals: setPar
       // Refresh the animals list
       fetchAnimals();
     } catch (err) {
-      console.error('Error adding animal:', err);
-      Alert.alert('Error', 'Failed to add animal');
+      console.error('Error in addAnimal:', err);
+      Alert.alert('Error', 'Failed to add animal and size options');
     } finally {
       setLoading(false);
       setUploadingImage(false);
@@ -322,11 +387,6 @@ export default function AnimalsTab({ animals: initialAnimals, setAnimals: setPar
     setRefreshing(true);
     fetchAnimals();
   };
-  
-  // Initial data fetch
-  useEffect(() => {
-    fetchAnimals();
-  }, []);
   
   // Apply filters when search query or active filter changes
   useEffect(() => {
