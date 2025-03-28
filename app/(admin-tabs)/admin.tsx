@@ -28,6 +28,7 @@ import DatesTab from '../components/admin-tabs/DatesTab';
 import PriceOptionsTab from '../components/admin-tabs/PriceOptionsTab';
 import OrgansTab from '../components/admin-tabs/OrgansTab';
 import ExtrasTab from '../components/admin-tabs/ExtrasTab';
+import DeliveryFeeTab from '../components/admin-tabs/DeliveryFeeTab';
 
 // Define types for our data - These need to match the component expectations
 type Animal = {
@@ -224,7 +225,7 @@ const initialExtras: Extra[] = [
   },
 ];
 
-type AdminTab = 'animals' | 'cuttingStyles' | 'orders' | 'dates' | 'priceOptions' | 'organs' | 'extras';
+type AdminTab = 'animals' | 'cuttingStyles' | 'orders' | 'dates' | 'priceOptions' | 'organs' | 'extras' | 'deliveryFee';
 
 // This comment is a temporary fix for type compatibility issues.
 // There are conflicting type definitions between component files and this admin.tsx file.
@@ -272,6 +273,7 @@ export default function AdminScreen() {
 
   const [organs, setOrgans] = useState<Organ[]>(initialOrgans);
   const [extras, setExtras] = useState<Extra[]>(initialExtras);
+  const [deliveryFee, setDeliveryFee] = useState<number>(0);
 
   // Filter orders when date filter or orders list changes
   useEffect(() => {
@@ -632,6 +634,25 @@ export default function AdminScreen() {
             </Text>
           </TouchableOpacity>
           
+          <TouchableOpacity
+            style={[
+              styles.tab,
+              activeTab === 'deliveryFee' && { ...styles.activeTab, borderBottomColor: colors.primary }
+            ]}
+            onPress={() => {
+              setTimeout(() => setActiveTab('deliveryFee'), 0);
+            }}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                activeTab === 'deliveryFee' && { ...styles.activeTabText, color: colors.primary }
+              ]}
+            >
+              Delivery Fee
+            </Text>
+          </TouchableOpacity>
+          
         </ScrollView>
       </View>
     );
@@ -687,6 +708,12 @@ export default function AdminScreen() {
           <ExtrasTab
             extras={extras}
             setExtras={setExtras}
+          />
+        )}
+        {activeTab === 'deliveryFee' && (
+          <DeliveryFeeTab
+            deliveryFee={deliveryFee}
+            setDeliveryFee={setDeliveryFee}
           />
         )}
       </View>

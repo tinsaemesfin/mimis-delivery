@@ -32,6 +32,7 @@ interface Order {
   status: string;
   customer_name: string;
   total: number;
+  delivery_fee: number;
   animal_size_id: string;
   price_option_id: string;
   cutting_style_id: string;
@@ -276,6 +277,9 @@ export default function OrdersScreen() {
         const start = parseISO(startDate);
         const end = parseISO(endDate);
         
+        // Set end date to end of day (23:59:59) to include the entire day
+        end.setHours(23, 59, 59, 999);
+        
         results = results.filter(order => {
           try {
             const orderDate = parseISO(order.created_at);
@@ -495,14 +499,21 @@ export default function OrdersScreen() {
           
           <View style={styles.detailRow}>
             <Text style={[styles.detailLabel, { color: colors.lightText }]}>Base Price:</Text>
-          <Text style={[styles.detailValue, { color: colors.text }]}>
+            <Text style={[styles.detailValue, { color: colors.text }]}>
               ${order.price_option?.price.toFixed(2)}
-          </Text>
-        </View>
+            </Text>
+          </View>
+
+          <View style={styles.detailRow}>
+            <Text style={[styles.detailLabel, { color: colors.lightText }]}>Delivery Fee:</Text>
+            <Text style={[styles.detailValue, { color: colors.text }]}>
+              ${order.delivery_fee.toFixed(2)}
+            </Text>
+          </View>
 
           {order.extras && order.extras.length > 0 && (
             <>
-          <View style={styles.detailRow}>
+              <View style={styles.detailRow}>
                 <Text style={[styles.detailLabel, { color: colors.lightText }]}>Additional Services:</Text>
                 <View style={styles.extrasContainer}>
                   {order.extras.map((extra, index) => (
@@ -513,7 +524,7 @@ export default function OrdersScreen() {
                       <Text style={[styles.extraPrice, { color: colors.primary }]}>
                         ${extra.price.toFixed(2)}
                       </Text>
-          </View>
+                    </View>
                   ))}
                 </View>
               </View>
@@ -533,7 +544,8 @@ export default function OrdersScreen() {
             <Text style={[styles.detailValue, { color: colors.primary, fontWeight: '700', fontSize: 16 }]}>
               ${(
                 (order.price_option?.price || 0) + 
-                (order.extras?.reduce((sum, extra) => sum + extra.price, 0) || 0)
+                (order.extras?.reduce((sum, extra) => sum + extra.price, 0) || 0) +
+                (order.delivery_fee || 0)
               ).toFixed(2)}
             </Text>
           </View>

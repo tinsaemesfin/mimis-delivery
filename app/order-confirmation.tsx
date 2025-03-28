@@ -63,13 +63,13 @@ Please keep this information for your records.
           },
           {
             text: "Done",
-            onPress: () => router.push('/'),
+            onPress: () => router.push('/(tabs)/orders'),
             style: "default"
           }
         ]
       );
     } else {
-      router.push('/');
+      router.push('/(tabs)/orders');
     }
   };
 
