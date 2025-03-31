@@ -19,43 +19,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check for existing session in AsyncStorage
-    const checkSession = async () => {
+    // Initialize auth state
+    const initializeAuth = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          setSession(session);
-          // Store session in AsyncStorage for persistence
-          await AsyncStorage.setItem('session', JSON.stringify(session));
-        } else {
-          // Check AsyncStorage for any stored session
-          const storedSession = await AsyncStorage.getItem('session');
-          if (storedSession) {
-            setSession(JSON.parse(storedSession));
-          }
+        // First try to get the current session from Supabase
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        
+        if (currentSession) {
+          setSession(currentSession);
+          await AsyncStorage.setItem('session', JSON.stringify(currentSession));
         }
+
+        // Set up auth state change listener
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
+          setSession(newSession);
+          if (newSession) {
+            await AsyncStorage.setItem('session', JSON.stringify(newSession));
+          } else {
+            await AsyncStorage.removeItem('session');
+          }
+        });
+
+        return () => {
+          subscription.unsubscribe();
+        };
       } catch (error) {
-        console.error('Error checking session:', error);
+        console.error('Error initializing auth:', error);
       } finally {
         setLoading(false);
       }
     };
 
-    checkSession();
-
-    // Listen for auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      setSession(session);
-      if (session) {
-        await AsyncStorage.setItem('session', JSON.stringify(session));
-      } else {
-        await AsyncStorage.removeItem('session');
-      }
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
+    initializeAuth();
   }, []);
 
   const signInWithEmail = async (email: string, password: string) => {
@@ -67,10 +62,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (error) throw error;
       
-      setSession(data.session);
       if (data.session) {
+        setSession(data.session);
         await AsyncStorage.setItem('session', JSON.stringify(data.session));
       }
+      
       return data;
     } catch (error) {
       console.error('Email sign in error:', error);
