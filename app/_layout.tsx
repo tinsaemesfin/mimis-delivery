@@ -12,6 +12,7 @@ import Account from './components/auth/Account';
 import { Colors } from '../constants/Colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import AgreementDialog from './components/AgreementDialog';
+import { View, Text } from 'react-native';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -26,6 +27,15 @@ export const unstable_settings = {
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
+function ErrorFallback({ error }: { error: Error }) {
+  return (
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+      <Text style={{ fontSize: 16, marginBottom: 10 }}>Something went wrong:</Text>
+      <Text style={{ color: 'red' }}>{error.message}</Text>
+    </View>
+  );
+}
+
 // This ensures the sign-in screen appears first
 export default function RootLayout() {
   const [loaded, error] = useFonts({
@@ -36,16 +46,29 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme || 'light'];
   const [showAgreement, setShowAgreement] = useState(false);
+  const [initError, setInitError] = useState<Error | null>(null);
 
   // Expo Router uses Error Boundaries to catch errors in the navigation tree.
   useEffect(() => {
-    if (error) throw error;
+    if (error) {
+      console.error('Font loading error:', error);
+      setInitError(error);
+    }
   }, [error]);
 
   useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
+    async function initializeApp() {
+      try {
+        if (loaded) {
+          await SplashScreen.hideAsync();
+        }
+      } catch (err) {
+        console.error('Error hiding splash screen:', err);
+        setInitError(err instanceof Error ? err : new Error(String(err)));
+      }
     }
+
+    initializeApp();
   }, [loaded]);
 
   useEffect(() => {
@@ -72,8 +95,16 @@ export default function RootLayout() {
     }
   };
 
+  if (initError) {
+    return <ErrorFallback error={initError} />;
+  }
+
   if (!loaded) {
-    return null;
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <Text>Loading...</Text>
+      </View>
+    );
   }
 
   return (
