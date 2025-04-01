@@ -4,10 +4,10 @@
     "slug": "mimis-delivery",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/logo.png",
+    "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/images/splash-sc.svg",
+      "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -34,7 +34,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/logo.png",
+        "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
       "package": "com.mimisdelivery.app",
@@ -60,7 +60,7 @@
       "runtimeVersion": "1.0.0"
     },
     "web": {
-      "favicon": "./assets/images/logo.png"
+      "favicon": "./assets/images/favicon.png"
     },
     "scheme": "mimisdelivery",
     "plugins": [
