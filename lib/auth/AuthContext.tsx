@@ -22,16 +22,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Initialize auth state
     const initializeAuth = async () => {
       try {
-        // First try to get the current session from Supabase
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        setLoading(true);
         
-        if (currentSession) {
+        // First check AsyncStorage for existing session
+        const storedSession = await AsyncStorage.getItem('session');
+        if (storedSession) {
+          const parsedSession = JSON.parse(storedSession);
+          setSession(parsedSession);
+        }
+
+        // Then try to get the current session from Supabase
+        const { data: { session: currentSession }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('Error getting session:', error);
+          // If there's an error, clear the stored session
+          await AsyncStorage.removeItem('session');
+          setSession(null);
+        } else if (currentSession) {
           setSession(currentSession);
           await AsyncStorage.setItem('session', JSON.stringify(currentSession));
         }
 
         // Set up auth state change listener
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
+          console.log('Auth state changed:', _event, !!newSession);
           setSession(newSession);
           if (newSession) {
             await AsyncStorage.setItem('session', JSON.stringify(newSession));
@@ -45,6 +60,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
       } catch (error) {
         console.error('Error initializing auth:', error);
+        // On error, clear session to be safe
+        setSession(null);
+        await AsyncStorage.removeItem('session');
       } finally {
         setLoading(false);
       }
@@ -55,6 +73,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signInWithEmail = async (email: string, password: string) => {
     try {
+      setLoading(true);
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -71,11 +90,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error('Email sign in error:', error);
       throw error;
+    } finally {
+      setLoading(false);
     }
   };
 
   const signUpWithEmail = async (email: string, password: string, fullName: string, phoneNumber: string) => {
     try {
+      setLoading(true);
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -100,17 +122,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error('Email sign up error:', error);
       throw error;
+    } finally {
+      setLoading(false);
     }
   };
 
   const signOut = async () => {
     try {
+      setLoading(true);
       await supabase.auth.signOut();
       await AsyncStorage.removeItem('session');
       setSession(null);
     } catch (error) {
       console.error('Sign out error:', error);
       throw error;
+    } finally {
+      setLoading(false);
     }
   };
 

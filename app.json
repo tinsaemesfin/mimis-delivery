@@ -1,13 +1,13 @@
 {
   "expo": {
-    "name": "Mimi's Delivery",
+    "name": "Mimis Delivery",
     "slug": "mimis-delivery",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/logo.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/images/splash-sc.png",
+      "image": "./assets/images/splash-sc.svg",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -84,6 +84,10 @@
     },
     "updates": {
       "url": "https://u.expo.dev/8f798de6-fd64-49df-8e39-b86e051c7c46"
-    }
+    },
+    "experiments": {
+      "tsconfigPaths": true
+    },
+    "newArchEnabled": true
   }
 }
