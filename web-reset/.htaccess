@@ -1,0 +1,64 @@
+# Enable Cross-Origin Resource Sharing (CORS)
+<IfModule mod_headers.c>
+    Header set Access-Control-Allow-Origin "*"
+    Header set Access-Control-Allow-Methods "GET, POST, OPTIONS"
+    Header set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
+    
+    # Handle preflight requests
+    <If "%{REQUEST_METHOD} == 'OPTIONS'">
+        Header set Access-Control-Allow-Origin "*"
+        Header set Access-Control-Allow-Methods "GET, POST, OPTIONS"
+        Header set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
+        Header set Access-Control-Max-Age "1728000"
+        Header set Content-Length "0"
+        Header set Content-Type "text/plain"
+        RewriteRule ^(.*)$ $1 [R=200,L]
+    </If>
+</IfModule>
+
+# Handle redirects for SPA
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /reset-password/
+    
+    # If the request is for an existing file or directory, serve it directly
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+    
+    # For all token parameters, redirect to the index page
+    RewriteCond %{QUERY_STRING} token=([^&]+) [OR]
+    RewriteCond %{QUERY_STRING} access_token=([^&]+)
+    RewriteRule ^(.*)$ index.html [L]
+</IfModule>
+
+# Set security headers
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-XSS-Protection "1; mode=block"
+    Header set Referrer-Policy "no-referrer-when-downgrade"
+</IfModule>
+
+# Enable gzip compression
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css application/javascript application/json
+</IfModule>
+
+# Set caching headers
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresDefault "access plus 1 week"
+    
+    # CSS and JavaScript files - 1 month
+    ExpiresByType text/css "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+    
+    # Images - 3 months
+    ExpiresByType image/jpeg "access plus 3 months"
+    ExpiresByType image/png "access plus 3 months"
+    ExpiresByType image/gif "access plus 3 months"
+    ExpiresByType image/svg+xml "access plus 3 months"
+    
+    # HTML - always fresh
+    ExpiresByType text/html "access plus 0 seconds"
+</IfModule> 

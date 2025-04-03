@@ -1,0 +1,18 @@
+<h2>Reset Password</h2>
+
+<p>Hello,</p>
+
+<p>We received a request to reset your password. If you didn't make this request, you can safely ignore this email.</p>
+
+<p>To reset your password, click the link below:</p>
+
+<p>
+  <a href="mimisdelivery://reset-password?code={{ .Token }}&type=recovery">Reset Password</a>
+</p>
+
+<p>If the button above doesn't work, you can copy and paste this URL into your browser:</p>
+<p>mimisdelivery://reset-password?code={{ .Token }}&type=recovery</p>
+
+<p>This link will expire in 24 hours for security reasons.</p>
+
+<p>Thanks,<br>Mimi's Delivery Team</p> 

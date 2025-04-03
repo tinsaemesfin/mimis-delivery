@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://*.supabase.co; script-src 'self' 'unsafe-inline' cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' fonts.googleapis.com; font-src fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://*.supabase.co;">
+    <title>Mimi's Delivery - Reset Password</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <div class="logo-container">
+            <img src="logo.png" alt="Mimi's Delivery" class="logo" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgdmlld0JveD0iMCAwIDIwMCAyMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjIwMCIgaGVpZ2h0PSIyMDAiIGZpbGw9IiMwMDY2Q0MiLz48dGV4dCB4PSI1MCIgeT0iMTAwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMjQiIGZpbGw9IndoaXRlIj5NaW1pJ3MgRGVsaXZlcnk8L3RleHQ+PC9zdmc+'">
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <h1>Reset Your Password</h1>
+                <p>Please enter your new password below.</p>
+            </div>
+            
+            <div id="loading" class="loading-container">
+                <div class="loading-spinner"></div>
+                <p>Processing your request...</p>
+            </div>
+            
+            <div id="error-message" class="error-message"></div>
+            
+            <div id="error-action" class="error-action hidden">
+                <a href="https://mimisdelivery.aradatech.com" class="btn-secondary">Back to Login</a>
+                <a href="mailto:support@mimisdelivery.aradatech.com?subject=Password%20Reset%20Issue" class="btn-text">Contact Support</a>
+            </div>
+            
+            <form id="reset-form">
+                <div class="form-group">
+                    <label for="password">New Password</label>
+                    <input type="password" id="password" name="password" placeholder="Enter your new password" required minlength="6">
+                    <small class="input-help">Password must be at least 6 characters</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="confirm-password">Confirm Password</label>
+                    <input type="password" id="confirm-password" name="confirm-password" placeholder="Confirm your new password" required minlength="6">
+                </div>
+                
+                <button type="submit" class="btn-primary">Reset Password</button>
+            </form>
+            
+            <div id="success-message" class="success-message hidden">
+                <div class="success-icon">✓</div>
+                <h2>Password Reset Successful!</h2>
+                <p>Your password has been successfully updated. You can now log in with your new password.</p>
+                <a href="https://mimisdelivery.aradatech.com/login" class="btn-primary">Go to Login</a>
+                <div class="mobile-app-links">
+                    <p>Or open the app:</p>
+                    <a href="mimisdelivery://sign-in" class="app-link">Open Mimi's Delivery App</a>
+                </div>
+            </div>
+            
+            <div id="debug-info" class="debug-info hidden">
+                <h3>Debug Information</h3>
+                <pre id="debug-content"></pre>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>&copy; 2025 Mimi's Delivery. All rights reserved.</p>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="reset.js"></script>
+</body>
+</html> 

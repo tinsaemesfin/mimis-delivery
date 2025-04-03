@@ -1,6 +1,6 @@
 {
   "cli": {
-    "version": ">= 16.0.1",
+    "version": ">= 5.9.1",
     "appVersionSource": "remote",
     "requireCommit": true 
   },
@@ -8,8 +8,11 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      "android": {
+        "gradleCommand": ":app:assembleDebug"
+      },
       "env": {
-        "EXPO_PUBLIC_SUPABASE_URL": "WILL_BE_REPLACED_DURING_BUILD",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://kpsfqfntcfxejipieres.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "WILL_BE_REPLACED_DURING_BUILD"
       }
     },
@@ -19,15 +22,18 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_SUPABASE_URL": "WILL_BE_REPLACED_DURING_BUILD",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://kpsfqfntcfxejipieres.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "WILL_BE_REPLACED_DURING_BUILD"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_SUPABASE_URL": "WILL_BE_REPLACED_DURING_BUILD",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://kpsfqfntcfxejipieres.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "WILL_BE_REPLACED_DURING_BUILD"
+      },
+      "android": {
+        "buildType": "apk"
       }
     }
   },
