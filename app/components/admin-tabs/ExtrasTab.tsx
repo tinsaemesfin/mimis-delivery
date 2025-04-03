@@ -41,6 +41,7 @@ export default function ExtrasTab({ extras, setExtras }: ExtrasTabProps) {
     price: ''
   });
   const [loading, setLoading] = useState(false);
+  const [filter, setFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
   const handleAddExtra = async () => {
     if (newExtra.title.trim() === '') {
@@ -107,6 +108,12 @@ export default function ExtrasTab({ extras, setExtras }: ExtrasTabProps) {
     return `$${price.toFixed(2)}`;
   };
 
+  const filteredExtras = extras.filter(extra => {
+    if (filter === 'all') return true;
+    if (filter === 'active') return extra.is_active;
+    return !extra.is_active;
+  });
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -118,6 +125,45 @@ export default function ExtrasTab({ extras, setExtras }: ExtrasTabProps) {
         />
       </View>
 
+      <View style={styles.filterContainer}>
+        <TouchableOpacity
+          style={[
+            styles.filterButton,
+            filter === 'all' && { backgroundColor: colors.primary }
+          ]}
+          onPress={() => setFilter('all')}
+        >
+          <Text style={[
+            styles.filterButtonText,
+            filter === 'all' && { color: 'white' }
+          ]}>All</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.filterButton,
+            filter === 'active' && { backgroundColor: colors.primary }
+          ]}
+          onPress={() => setFilter('active')}
+        >
+          <Text style={[
+            styles.filterButtonText,
+            filter === 'active' && { color: 'white' }
+          ]}>Active</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.filterButton,
+            filter === 'inactive' && { backgroundColor: colors.primary }
+          ]}
+          onPress={() => setFilter('inactive')}
+        >
+          <Text style={[
+            styles.filterButtonText,
+            filter === 'inactive' && { color: 'white' }
+          ]}>Inactive</Text>
+        </TouchableOpacity>
+      </View>
+
       {loading && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="large" color={colors.primary} />
@@ -125,7 +171,7 @@ export default function ExtrasTab({ extras, setExtras }: ExtrasTabProps) {
       )}
 
       <FlatList
-        data={extras}
+        data={filteredExtras}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <View style={[styles.extraItem, { backgroundColor: colors.card }]}>
@@ -307,5 +353,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1000,
+  },
+  filterContainer: {
+    flexDirection: 'row',
+    marginBottom: 16,
+    gap: 8,
+  },
+  filterButton: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.light.primary,
+    alignItems: 'center',
+  },
+  filterButtonText: {
+    color: Colors.light.primary,
+    fontWeight: '600',
   },
 }); 

@@ -13,7 +13,7 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import Button from '../../components/Button';
 import { Colors } from '../../constants/Colors';
 import { useColorScheme } from '../../hooks/useColorScheme';
@@ -47,7 +47,7 @@ export default function HomeScreen() {
         >
           <View style={styles.heroSection}>
             <Image 
-              source={require('../../assets/images/meat-banner.png')} 
+              source={require('../../assets/images/View-of-sheep.png')} 
               style={styles.heroImage}
               resizeMode="cover"
             />
@@ -62,7 +62,7 @@ export default function HomeScreen() {
                 Mimi's Delivery
               </Text>
               <Text style={[styles.heroSubtitle, createTextShadow('rgba(0, 0, 0, 0.5)', { width: 0, height: 1 }, 2)]}>
-                Premium Lamb & Sheep Delivery
+                Premium Lamb, Goat & Sheep Delivery
               </Text>
             </View>
           </View>
@@ -73,13 +73,13 @@ export default function HomeScreen() {
             </Text>
             
             <Text style={[styles.description, { color: colors.lightText }]}>
-              We deliver premium quality lamb and sheep directly from farm to your doorstep.
+              We deliver premium quality lamb, goat and sheep directly from farm to your doorstep.
             </Text>
 
             <View style={styles.featuresContainer}>
               <View style={[styles.featureRow, { backgroundColor: colors.card }]}>
                 <View style={[styles.featureIconContainer, { backgroundColor: colors.primary + '20' }]}>
-                  <Ionicons name="paw" size={24} color={colors.primary} />
+                  <MaterialCommunityIcons name="sheep" size={24} color={colors.primary} />
                 </View>
                 <View style={styles.featureTextContainer}>
                   <Text style={[styles.featureTitle, { color: colors.text }]}>Whole Animals</Text>
@@ -91,7 +91,7 @@ export default function HomeScreen() {
 
               <View style={[styles.featureRow, { backgroundColor: colors.card }]}>
                 <View style={[styles.featureIconContainer, { backgroundColor: colors.primary + '20' }]}>
-                  <Ionicons name="cut" size={24} color={colors.primary} />
+                  <MaterialCommunityIcons name="food-steak" size={24} color={colors.primary} />
                 </View>
                 <View style={styles.featureTextContainer}>
                   <Text style={[styles.featureTitle, { color: colors.text }]}>Custom Cuts</Text>
@@ -108,7 +108,7 @@ export default function HomeScreen() {
                 <View style={styles.featureTextContainer}>
                   <Text style={[styles.featureTitle, { color: colors.text }]}>Fast Delivery</Text>
                   <Text style={[styles.featureDescription, { color: colors.lightText }]}>
-                    Fresh meat delivered directly to your doorstep
+                    Freshly Produced and delivered directly to your doorstep
                   </Text>
                 </View>
               </View>

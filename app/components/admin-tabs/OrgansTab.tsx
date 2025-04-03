@@ -35,6 +35,7 @@ export default function OrgansTab({ organs, setOrgans }: OrgansTabProps) {
   const [modalVisible, setModalVisible] = useState(false);
   const [newOrganName, setNewOrganName] = useState('');
   const [loading, setLoading] = useState(false);
+  const [filter, setFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
   // Fetch organs when component mounts
   useEffect(() => {
@@ -125,6 +126,12 @@ export default function OrgansTab({ organs, setOrgans }: OrgansTabProps) {
     }
   };
 
+  const filteredOrgans = organs.filter(organ => {
+    if (filter === 'all') return true;
+    if (filter === 'active') return organ.is_active;
+    return !organ.is_active;
+  });
+
   const renderItem = ({ item }: { item: Organ }) => (
     <View style={[styles.organItem, { backgroundColor: colors.card }]}>
       <Text style={[styles.organName, { color: colors.text }]}>{item.name}</Text>
@@ -153,6 +160,45 @@ export default function OrgansTab({ organs, setOrgans }: OrgansTabProps) {
         />
       </View>
 
+      <View style={styles.filterContainer}>
+        <TouchableOpacity
+          style={[
+            styles.filterButton,
+            filter === 'all' && { backgroundColor: colors.primary }
+          ]}
+          onPress={() => setFilter('all')}
+        >
+          <Text style={[
+            styles.filterButtonText,
+            filter === 'all' && { color: 'white' }
+          ]}>All</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.filterButton,
+            filter === 'active' && { backgroundColor: colors.primary }
+          ]}
+          onPress={() => setFilter('active')}
+        >
+          <Text style={[
+            styles.filterButtonText,
+            filter === 'active' && { color: 'white' }
+          ]}>Active</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.filterButton,
+            filter === 'inactive' && { backgroundColor: colors.primary }
+          ]}
+          onPress={() => setFilter('inactive')}
+        >
+          <Text style={[
+            styles.filterButtonText,
+            filter === 'inactive' && { color: 'white' }
+          ]}>Inactive</Text>
+        </TouchableOpacity>
+      </View>
+
       {loading && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="large" color={colors.primary} />
@@ -160,7 +206,7 @@ export default function OrgansTab({ organs, setOrgans }: OrgansTabProps) {
       )}
 
       <FlatList
-        data={organs}
+        data={filteredOrgans}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         refreshing={loading}
@@ -290,5 +336,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1000,
+  },
+  filterContainer: {
+    flexDirection: 'row',
+    marginBottom: 16,
+    gap: 8,
+  },
+  filterButton: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.light.primary,
+    alignItems: 'center',
+  },
+  filterButtonText: {
+    color: Colors.light.primary,
+    fontWeight: '600',
   },
 }); 

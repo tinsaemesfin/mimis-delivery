@@ -40,7 +40,7 @@ interface OrderDetails {
   phoneNumber: string;
   zipCode: string;
   address: string;
-  email: string;
+  email?: string;
   isValidZip: boolean;
   notes: string;
   divided: string;
@@ -74,10 +74,10 @@ const isValidUSPhone = (phone: string) => {
   return phoneRegex.test(phone);
 };
 
-// DC Coordinates (approximate center)
+// Seattle Coordinates (approximate center)
 const DC_CENTER = {
-  lat: 38.8977,
-  lng: -77.0365
+  lat: 47.6062,
+  lng: -122.3321
 };
 
 const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
@@ -261,7 +261,7 @@ export default function OrderDetailsScreen() {
         } else {
           Alert.alert(
             "Invalid ZIP Code",
-            `This ZIP code is ${Math.round(distance)} miles from DC, which is outside our 70-mile delivery radius.`
+            `This ZIP code is ${Math.round(distance)} miles from Seattle, which is outside our 70-mile delivery radius.`
           );
           setOrderDetails(prev => ({ ...prev, isValidZip: false }));
           return false;
@@ -309,19 +309,21 @@ export default function OrderDetailsScreen() {
       if (!isValid) return;
     }
 
-    if (!user && (!orderDetails.customerName.trim() || !orderDetails.email.trim())) {
-      Alert.alert('Error', 'Please fill in all required fields');
+    if (!user && !orderDetails.customerName.trim()) {
+      Alert.alert('Error', 'Please enter your name');
       return;
     }
 
     try {
       const orderTicket = generateOrderTicket();
       
+      const defaultGuestEmail = 'guest@mimisdelivery.aradatech.com';
+      
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
         .insert({
           user_id: user?.id || null,
-          guest_email: !user ? orderDetails.email : null,
+          guest_email: !user ? (orderDetails.email?.trim() || defaultGuestEmail) : null,
           guest_phone: !user ? orderDetails.phoneNumber : null,
           customer_name: orderDetails.customerName,
           phone_number: orderDetails.phoneNumber,
@@ -594,7 +596,7 @@ export default function OrderDetailsScreen() {
             
             <TextInput
               style={[styles.input, { backgroundColor: colors.card, color: colors.text }]}
-              placeholder="ZIP Code (Must be within 70 miles of DC)"
+              placeholder="ZIP Code (Must be within 70 miles of Seattle)"
               placeholderTextColor={colors.lightText}
               value={orderDetails.zipCode}
               onChangeText={(text) => {
