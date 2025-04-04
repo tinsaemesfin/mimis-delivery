@@ -12,7 +12,9 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
-  ScrollView
+  ScrollView,
+  KeyboardAvoidingView,
+  Keyboard
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Colors } from '../../constants/Colors';
@@ -562,65 +564,74 @@ export default function OrdersScreen() {
   );
 
   const renderGuestView = () => (
-    <View style={styles.guestContainer}>
-      {!orders.length ? (
-        <View style={styles.guestContent}>
-          <View style={styles.guestHeader}>
-            <Ionicons name="ticket-outline" size={64} color={colors.primary} />
-            <Text style={[styles.guestTitle, { color: colors.text }]}>
-              Track Your Order
-            </Text>
-            <Text style={[styles.guestSubtitle, { color: colors.lightText }]}>
-              Enter your order ticket number to view your order details
-            </Text>
-          </View>
-          
-          <View style={styles.ticketInputContainer}>
-            <TextInput
-              style={[styles.ticketInput, { 
-                backgroundColor: colors.card,
-                color: colors.text,
-                borderColor: error ? colors.error : colors.border
-              }]}
-              placeholder="Enter Ticket Number (e.g., ABC123)"
-              placeholderTextColor={colors.lightText}
-              value={ticketNumber}
-              onChangeText={(text) => {
-                setTicketNumber(text.toUpperCase());
-                setError(null);
-              }}
-              autoCapitalize="characters"
-              maxLength={6}
-            />
-            <Button
-              title="Look Up Order"
-              onPress={lookupOrderByTicket}
-              style={styles.lookupButton}
-              disabled={!ticketNumber.trim() || ticketNumber.trim().length < 6}
-            />
-          </View>
+    <KeyboardAvoidingView 
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={styles.guestContainer}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+    >
+      <ScrollView 
+        contentContainerStyle={styles.guestScrollContent}
+        keyboardShouldPersistTaps="handled"
+      >
+        {!orders.length ? (
+          <View style={styles.guestContent}>
+            <View style={styles.guestHeader}>
+              <Ionicons name="ticket-outline" size={64} color={colors.primary} />
+              <Text style={[styles.guestTitle, { color: colors.text }]}>
+                Track Your Order
+              </Text>
+              <Text style={[styles.guestSubtitle, { color: colors.lightText }]}>
+                Enter your order ticket number to view your order details
+              </Text>
+            </View>
+            
+            <View style={styles.ticketInputContainer}>
+              <TextInput
+                style={[styles.ticketInput, { 
+                  backgroundColor: colors.card,
+                  color: colors.text,
+                  borderColor: error ? colors.error : colors.border
+                }]}
+                placeholder="Enter Ticket Number (e.g., ABC123)"
+                placeholderTextColor={colors.lightText}
+                value={ticketNumber}
+                onChangeText={(text) => {
+                  setTicketNumber(text.toUpperCase());
+                  setError(null);
+                }}
+                autoCapitalize="characters"
+                maxLength={6}
+              />
+              <Button
+                title="Look Up Order"
+                onPress={lookupOrderByTicket}
+                style={styles.lookupButton}
+                disabled={!ticketNumber.trim() || ticketNumber.trim().length < 6}
+              />
+            </View>
 
-          {error && (
-            <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
-          )}
-        </View>
-      ) : (
-        <View style={styles.orderDetailsContainer}>
-          <ScrollView contentContainerStyle={styles.orderDetailsContent}>
-            {renderOrderDetails(orders[0])}
-            <Button
-              title="Look Up Another Order"
-              onPress={() => {
-                setOrders([]);
-                setTicketNumber('');
-                setError(null);
-              }}
-              style={styles.lookupAnotherButton}
-            />
-          </ScrollView>
-        </View>
-      )}
-    </View>
+            {error && (
+              <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
+            )}
+          </View>
+        ) : (
+          <View style={styles.orderDetailsContainer}>
+            <ScrollView contentContainerStyle={styles.orderDetailsContent}>
+              {renderOrderDetails(orders[0])}
+              <Button
+                title="Look Up Another Order"
+                onPress={() => {
+                  setOrders([]);
+                  setTicketNumber('');
+                  setError(null);
+                }}
+                style={styles.lookupAnotherButton}
+              />
+            </ScrollView>
+          </View>
+        )}
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 
   return (
@@ -1010,11 +1021,16 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
   },
+  guestScrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+  },
   guestContent: {
     flex: 1,
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingTop: 40,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 80,
   },
   guestHeader: {
     alignItems: 'center',

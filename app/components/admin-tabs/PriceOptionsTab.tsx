@@ -53,6 +53,14 @@ interface PriceOptionsTabProps {
   setPriceOptions: React.Dispatch<React.SetStateAction<PriceOption[]>>;
 }
 
+interface AnimalSizeOption {
+  size_id: string;
+  sizes: {
+    id: string;
+    name: string;
+  };
+}
+
 export default function PriceOptionsTab({ animals, priceOptions: initialOptions, setPriceOptions: setParentOptions }: PriceOptionsTabProps) {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme || 'light'];
@@ -76,6 +84,8 @@ export default function PriceOptionsTab({ animals, priceOptions: initialOptions,
   const [animalFilter, setAnimalFilter] = useState<string | null>(null);
   const [sizeFilter, setSizeFilter] = useState<string | null>(null);
   const [nameFilter, setNameFilter] = useState<string | null>(null);
+  
+  const [availableSizes, setAvailableSizes] = useState<Array<{ id: string; name: string }>>([]);
   
   // Fetch price options from Supabase with related data
   const fetchPriceOptions = async () => {
@@ -133,39 +143,74 @@ export default function PriceOptionsTab({ animals, priceOptions: initialOptions,
     setModalVisible(true);
   };
   
-  const getSelectedAnimalSizes = () => {
-    if (!selectedAnimal) return [];
+  const fetchAnimalSizes = async (animalId: string) => {
+    if (!animalId) {
+      setAvailableSizes([]);
+      return;
+    }
     
-    // Create a map to store unique sizes with their IDs
-    const sizeMap = new Map<string, { id: string; name: string }>();
-    
-    // Get sizes from price options for the selected animal
-    priceOptions.forEach(option => {
-      if (
-        option.animal_size_option?.animal?.id === selectedAnimal &&
-        option.animal_size_option?.size?.id &&
-        option.animal_size_option?.size?.name
-      ) {
-        sizeMap.set(option.animal_size_option.size.id, {
-          id: option.animal_size_option.size.id,
-          name: option.animal_size_option.size.name
-        });
-      }
-    });
+    try {
+      // Create a map to store unique sizes with their IDs
+      const sizeMap = new Map<string, { id: string; name: string }>();
+      
+      // Fetch sizes from animal_size_options table
+      const { data: animalSizeOptions, error } = await supabase
+        .from('animal_size_options')
+        .select(`
+          sizes (
+            id,
+            name
+          )
+        `)
+        .eq('animal_id', animalId);
 
-    // Get sizes from the animals prop
-    const animal = animals.find(a => a.id === selectedAnimal);
-    if (animal?.sizes) {
-      animal.sizes.forEach((size: string) => {
-        if (size) {
-          sizeMap.set(size, { id: size, name: size });
+      if (error) throw error;
+
+      // Add sizes from animal_size_options
+      animalSizeOptions?.forEach(option => {
+        const size = option.sizes;
+        if (size && typeof size === 'object' && 'id' in size && 'name' in size) {
+          const id = String(size.id);
+          const name = String(size.name);
+          sizeMap.set(id, { id, name });
         }
       });
-    }
 
-    // Convert map to array and sort by name
-    return Array.from(sizeMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+      // Get sizes from price options for the selected animal (as backup)
+      priceOptions.forEach(option => {
+        if (
+          option.animal_size_option?.animal?.id === animalId &&
+          option.animal_size_option?.size?.id &&
+          option.animal_size_option?.size?.name
+        ) {
+          sizeMap.set(option.animal_size_option.size.id, {
+            id: option.animal_size_option.size.id,
+            name: option.animal_size_option.size.name
+          });
+        }
+      });
+
+      // Get sizes from the animals prop (as backup)
+      const animal = animals.find(a => a.id === animalId);
+      if (animal?.sizes) {
+        animal.sizes.forEach((size: string) => {
+          if (size) {
+            sizeMap.set(size, { id: size, name: size });
+          }
+        });
+      }
+
+      setAvailableSizes(Array.from(sizeMap.values()).sort((a, b) => a.name.localeCompare(b.name)));
+    } catch (err) {
+      console.error('Error fetching animal sizes:', err);
+      setAvailableSizes([]);
+    }
   };
+  
+  // Update sizes when animal selection changes
+  useEffect(() => {
+    fetchAnimalSizes(selectedAnimal);
+  }, [selectedAnimal]);
   
   const checkExistingPriceOption = () => {
     if (!selectedAnimal || !selectedAnimalSize || !name) return false;
@@ -724,33 +769,39 @@ export default function PriceOptionsTab({ animals, priceOptions: initialOptions,
                 <View>
                   <Text style={[styles.inputLabel, { color: colors.lightText }]}>Size *</Text>
                   <View style={[styles.pickerContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                    <FlatList
-                      data={getSelectedAnimalSizes()}
-                      renderItem={({ item }) => (
-                        <TouchableOpacity
-                          style={[
-                            styles.pickerItem,
-                            selectedAnimalSize === item.id && styles.selectedPickerItem,
-                            { 
-                              backgroundColor: selectedAnimalSize === item.id ? colors.primary : 'transparent',
-                            }
-                          ]}
-                          onPress={() => setSelectedAnimalSize(item.id)}
-                        >
-                          <Text 
+                    {availableSizes.length > 0 ? (
+                      <FlatList
+                        data={availableSizes}
+                        renderItem={({ item }: { item: { id: string; name: string } }) => (
+                          <TouchableOpacity
                             style={[
-                              styles.pickerText,
-                              { color: selectedAnimalSize === item.id ? 'white' : colors.text }
+                              styles.pickerItem,
+                              selectedAnimalSize === item.id && styles.selectedPickerItem,
+                              { 
+                                backgroundColor: selectedAnimalSize === item.id ? colors.primary : 'transparent',
+                              }
                             ]}
+                            onPress={() => setSelectedAnimalSize(item.id)}
                           >
-                            {item.name.charAt(0).toUpperCase() + item.name.slice(1)}
-                          </Text>
-                        </TouchableOpacity>
-                      )}
-                      keyExtractor={item => item.id}
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                    />
+                            <Text 
+                              style={[
+                                styles.pickerText,
+                                { color: selectedAnimalSize === item.id ? 'white' : colors.text }
+                              ]}
+                            >
+                              {item.name.charAt(0).toUpperCase() + item.name.slice(1)}
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+                        keyExtractor={item => item.id}
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                      />
+                    ) : (
+                      <Text style={[styles.pickerText, { color: colors.lightText, padding: 8 }]}>
+                        Loading sizes...
+                      </Text>
+                    )}
                   </View>
                 </View>
               )}

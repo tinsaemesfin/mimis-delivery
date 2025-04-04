@@ -73,13 +73,6 @@ export default function ProfileScreen() {
     }
   }, [isEditModalVisible, user]);
 
-  // Redirect to sign-in if not logged in
-  useEffect(() => {
-    if (!user) {
-      router.replace('/sign-in');
-    }
-  }, [user]);
-
   const validateEditForm = () => {
     let isValid = true;
     
@@ -189,13 +182,16 @@ export default function ProfileScreen() {
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <StatusBar barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'} />
         <View style={styles.guestContainer}>
+          <View style={[styles.guestIconContainer, { backgroundColor: colors.primary }]}>
+            <Ionicons name="person-outline" size={40} color="#FFF" />
+          </View>
           <Text style={[styles.guestTitle, { color: colors.text }]}>Guest User</Text>
           <Text style={[styles.guestMessage, { color: colors.lightText }]}>
-            Sign in to access your profile and order history
+            Sign in to access your profile and manage your orders
           </Text>
           <TouchableOpacity
             style={[styles.signInButton, { backgroundColor: colors.primary }]}
-            onPress={() => router.replace('/sign-in')}
+            onPress={() => router.push('/sign-in')}
           >
             <Text style={styles.signInButtonText}>Sign In</Text>
           </TouchableOpacity>
@@ -693,6 +689,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
   },
+  guestIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
   guestTitle: {
     fontSize: 24,
     fontWeight: 'bold',
@@ -702,6 +706,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
     marginBottom: 24,
+    paddingHorizontal: 20,
   },
   signInButton: {
     paddingHorizontal: 32,
