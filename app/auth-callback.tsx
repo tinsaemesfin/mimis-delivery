@@ -6,6 +6,7 @@ import { Colors } from '../constants/Colors';
 import { useColorScheme } from '../hooks/useColorScheme';
 import * as Linking from 'expo-linking';
 import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function AuthCallback() {
   const router = useRouter();
@@ -216,13 +217,12 @@ export default function AuthCallback() {
             // For signup, we directly handle the verification in the app
             if (token) {
               const tokenHash = typeof token === 'string' ? token : Array.isArray(token) ? token[0] : '';
-              const { error } = await supabase.auth.verifyOtp({
+              const { error } = await supabase.auth.verifyEmail({
                 token_hash: tokenHash,
-                type: 'signup',
               });
               
               if (error) {
-                console.error('Error verifying signup:', error);
+                console.error('Error verifying email:', error);
                 Alert.alert(
                   'Verification Error',
                   'There was an error verifying your email. Please try again.',
@@ -230,6 +230,8 @@ export default function AuthCallback() {
                 );
               } else {
                 console.log('Email verified successfully');
+                // Set verification status in AsyncStorage
+                await AsyncStorage.setItem('email_verification_success', 'true');
                 Alert.alert(
                   'Email Verified',
                   'Your email has been verified successfully. You can now sign in.',
@@ -238,7 +240,7 @@ export default function AuthCallback() {
               }
             }
           } catch (error) {
-            console.error('Error during signup verification:', error);
+            console.error('Error during email verification:', error);
             Alert.alert('Verification Error', 'Failed to verify your email. Please try signing in again.');
             router.replace('/sign-in');
           }

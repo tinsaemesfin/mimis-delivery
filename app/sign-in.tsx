@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, 
   View, 
@@ -14,6 +14,7 @@ import {
   KeyboardAvoidingView,
   Alert
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import Button from '../components/Button';
@@ -61,6 +62,7 @@ export default function SignInScreen() {
   
   const [isLoading, setIsLoading] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
+  const [showVerificationSuccess, setShowVerificationSuccess] = useState(false);
   
   // Login form state
   const [email, setEmail] = useState('');
@@ -78,6 +80,18 @@ export default function SignInScreen() {
   const [phoneError, setPhoneError] = useState('');
   const [confirmPasswordError, setConfirmPasswordError] = useState('');
   const { user } = useAuth();
+
+  // Check if we came from email verification
+  useEffect(() => {
+    const checkVerificationStatus = async () => {
+      const verificationStatus = await AsyncStorage.getItem('email_verification_success');
+      if (verificationStatus === 'true') {
+        setShowVerificationSuccess(true);
+        await AsyncStorage.removeItem('email_verification_success');
+      }
+    };
+    checkVerificationStatus();
+  }, []);
 
   const validateLoginForm = () => {
     let isValid = true;
@@ -189,6 +203,20 @@ export default function SignInScreen() {
     }
   };
 
+  // Function to clear all form fields
+  const clearFormFields = () => {
+    setEmail('');
+    setPassword('');
+    setFullName('');
+    setPhoneNumber('');
+    setConfirmPassword('');
+    setEmailError('');
+    setPasswordError('');
+    setFullNameError('');
+    setPhoneError('');
+    setConfirmPasswordError('');
+  };
+
   const handleSignUp = async () => {
     if (!validateRegistrationForm()) return;
     
@@ -201,14 +229,26 @@ export default function SignInScreen() {
         Alert.alert(
           'Registration Successful', 
           'Please check your email to confirm your account before signing in.',
-          [{ text: 'OK', onPress: () => setIsRegistering(false) }]
+          [{ 
+            text: 'OK', 
+            onPress: () => {
+              clearFormFields();
+              setIsRegistering(false);
+            }
+          }]
         );
       } else {
         // If no email confirmation required or already confirmed
         Alert.alert(
           'Registration Successful', 
           'Your account has been created successfully. You can now sign in.',
-          [{ text: 'OK', onPress: () => setIsRegistering(false) }]
+          [{ 
+            text: 'OK', 
+            onPress: () => {
+              clearFormFields();
+              setIsRegistering(false);
+            }
+          }]
         );
       }
     } catch (error: any) {
@@ -217,7 +257,13 @@ export default function SignInScreen() {
         Alert.alert(
           'Registration Failed', 
           'An account with this email already exists. Please sign in instead.',
-          [{ text: 'Go to Sign In', onPress: () => setIsRegistering(false) }]
+          [{ 
+            text: 'Go to Sign In', 
+            onPress: () => {
+              clearFormFields();
+              setIsRegistering(false);
+            }
+          }]
         );
       } else {
         Alert.alert('Registration Failed', error.message || 'Please try again with different credentials.');
@@ -245,6 +291,17 @@ export default function SignInScreen() {
     setPhoneNumber(formatPhoneNumber(text));
   };
 
+  // Update the switch mode button handlers
+  const handleSwitchToSignIn = () => {
+    clearFormFields();
+    setIsRegistering(false);
+  };
+
+  const handleSwitchToSignUp = () => {
+    clearFormFields();
+    setIsRegistering(true);
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar style="light" />
@@ -259,6 +316,13 @@ export default function SignInScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.content}>
+            {showVerificationSuccess && (
+              <View style={[styles.successMessage, { backgroundColor: colors.success + '20' }]}>
+                <Text style={[styles.successText, { color: colors.success }]}>
+                  Your email has been verified successfully! You can now sign in.
+                </Text>
+              </View>
+            )}
             <View style={styles.logoContainer}>
               <View style={[styles.logoCircle, createShadow('rgba(200, 25, 25, 0.5)', { width: 0, height: 4 }, 0.25, 10)]}>
                 <Image
@@ -386,7 +450,7 @@ export default function SignInScreen() {
                     style={styles.actionButton}
                   />
                   
-                  <TouchableOpacity onPress={() => setIsRegistering(false)}>
+                  <TouchableOpacity onPress={handleSwitchToSignIn}>
                     <Text style={[styles.switchModeText, { color: colors.primary }]}>
                       Already have an account? Sign In
                     </Text>
@@ -453,7 +517,7 @@ export default function SignInScreen() {
                     style={styles.actionButton}
                   />
                   
-                  <TouchableOpacity onPress={() => setIsRegistering(true)}>
+                  <TouchableOpacity onPress={handleSwitchToSignUp}>
                     <Text style={[styles.switchModeText, { color: colors.primary }]}>
                       Don't have an account? Sign Up
                     </Text>
@@ -630,5 +694,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 999,
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  },
+  successMessage: {
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 20,
+  },
+  successText: {
+    fontSize: 14,
+    textAlign: 'center',
   },
 }); 
