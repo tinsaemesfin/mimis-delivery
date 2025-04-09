@@ -567,11 +567,15 @@ export default function OrdersScreen() {
     <KeyboardAvoidingView 
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.guestContainer}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+      enabled
     >
       <ScrollView 
         contentContainerStyle={styles.guestScrollContent}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        keyboardDismissMode="on-drag"
+        bounces={false}
       >
         {!orders.length ? (
           <View style={styles.guestContent}>
@@ -638,7 +642,7 @@ export default function OrdersScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
       
-      <View style={styles.headerContainer}>
+      {user &&( <View style={styles.headerContainer}>
         <View style={styles.header}>
           <Text style={[styles.title, { color: colors.text }]}>
             {user ? 'Your Orders' : 'Track Order'}
@@ -647,7 +651,7 @@ export default function OrdersScreen() {
             {user ? 'View your order history' : 'Look up your order details'}
           </Text>
         </View>
-      </View>
+      </View>)}
 
       {loading ? (
         <View style={styles.loadingContainer}>
@@ -1022,19 +1026,18 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   guestScrollContent: {
-    flexGrow: 1,
+    minHeight: '100%',
     justifyContent: 'center',
+    paddingBottom: 20,
   },
   guestContent: {
-    flex: 1,
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 40,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 80,
+    paddingTop: 20,
   },
   guestHeader: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 20,
     width: '100%',
     maxWidth: 400,
   },

@@ -196,6 +196,17 @@ export default function ProfileScreen() {
             <Text style={styles.signInButtonText}>Sign In</Text>
           </TouchableOpacity>
         </View>
+        <View style={styles.developerCredit}>
+          <Text style={[styles.developerText, { color: colors.lightText }]}>
+            Developed by Tinsae Mesfin -{' '}
+            <Text 
+              style={[styles.developerLink, { color: colors.primary }]}
+              onPress={handleAradaTechPress}
+            >
+              Arada Tech
+            </Text>
+          </Text>
+        </View>
       </SafeAreaView>
     );
   }

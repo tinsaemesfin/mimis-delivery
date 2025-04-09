@@ -44,6 +44,7 @@ interface OrderDetails {
   isValidZip: boolean;
   notes: string;
   divided: string;
+  buildingNumber: string;
 }
 
 interface Profile {
@@ -118,6 +119,7 @@ export default function OrderDetailsScreen() {
   const colors = Colors[colorScheme || 'light'];
   const { user } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [deliveryFee, setDeliveryFee] = useState<number>(0);
 
   // Fetch user profile when component mounts
   useEffect(() => {
@@ -172,6 +174,7 @@ export default function OrderDetailsScreen() {
     isValidZip: false,
     notes: '',
     divided: 'No',
+    buildingNumber: '',
   });
 
   // Update order details when profile is loaded
@@ -283,6 +286,30 @@ export default function OrderDetailsScreen() {
     setOrderDetails(prev => ({ ...prev, phoneNumber: formattedPhone }));
   };
 
+  const fetchDeliveryFee = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('delivery_fee')
+        .select('fee')
+        .single();
+
+      if (error) {
+        console.error('Error fetching delivery fee:', error);
+        return;
+      }
+
+      if (data) {
+        setDeliveryFee(data.fee);
+      }
+    } catch (err) {
+      console.error('Unexpected error fetching delivery fee:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchDeliveryFee();
+  }, []);
+
   const handleNextStep = async () => {
     if (!selectedDate) {
       Alert.alert('Error', 'Please select a delivery date');
@@ -291,6 +318,11 @@ export default function OrderDetailsScreen() {
 
     if (!orderDetails.zipCode.trim()) {
       Alert.alert('Error', 'Please enter your ZIP code');
+      return;
+    }
+
+    if (!orderDetails.buildingNumber.trim()) {
+      Alert.alert('Error', 'Please enter your building number');
       return;
     }
 
@@ -327,7 +359,7 @@ export default function OrderDetailsScreen() {
           guest_phone: !user ? orderDetails.phoneNumber : null,
           customer_name: orderDetails.customerName,
           phone_number: orderDetails.phoneNumber,
-          address: `${orderDetails.address}, ${orderDetails.zipCode}`,
+          address: `${orderDetails.buildingNumber} ${orderDetails.address}, ${orderDetails.zipCode}`,
           animal_size_id: params.sizeOptionId,
           price_option_id: params.priceOptionId,
           cutting_style_id: params.cuttingStyleId,
@@ -339,7 +371,9 @@ export default function OrderDetailsScreen() {
           special_instructions: orderDetails.notes || null,
           organs: params.selectedOrgans ? (typeof params.selectedOrgans === 'string' ? params.selectedOrgans.split(', ') : []) : null,
           extras: selectedExtras ? selectedExtras.map(extra => extra.id) : null,
-          divided: orderDetails.divided
+          divided: orderDetails.divided,
+          delivery_fee: deliveryFee,
+          building_number: orderDetails.buildingNumber
         })
         .select()
         .single();
@@ -357,10 +391,12 @@ export default function OrderDetailsScreen() {
           isGuest: !user ? 'true' : 'false',
           ...params,
           deliveryDateId: selectedDate,
+          deliveryDate: deliveryDates.find(date => date.id === selectedDate)?.date,
           customerName: orderDetails.customerName,
           phoneNumber: orderDetails.phoneNumber,
-          address: `${orderDetails.address}, ${orderDetails.zipCode}`,
+          address: `${orderDetails.buildingNumber} ${orderDetails.address}, ${orderDetails.zipCode}`,
           email: orderDetails.email,
+          deliveryFee: deliveryFee.toString(),
         }
       });
     } catch (error) {
@@ -461,15 +497,22 @@ export default function OrderDetailsScreen() {
                     ${totalExtrasPrice.toFixed(2)}
                   </Text>
                 </View>
-                <View style={styles.divider} />
-                <View style={styles.summaryRow}>
-                  <Text style={[styles.summaryLabel, { color: colors.lightText, fontWeight: '600' }]}>Final Price:</Text>
-                  <Text style={[styles.summaryValue, { color: colors.primary, fontWeight: '700', fontSize: 18 }]}>
-                    ${finalPrice.toFixed(2)}
-                  </Text>
-                </View>
               </>
             )}
+            <View style={styles.divider} />
+            <View style={styles.summaryRow}>
+              <Text style={[styles.summaryLabel, { color: colors.lightText }]}>Delivery Fee:</Text>
+              <Text style={[styles.summaryValue, { color: colors.primary }]}>
+                ${deliveryFee.toFixed(2)}
+              </Text>
+            </View>
+            <View style={styles.divider} />
+            <View style={styles.summaryRow}>
+              <Text style={[styles.summaryLabel, { color: colors.lightText, fontWeight: '600' }]}>Final Price:</Text>
+              <Text style={[styles.summaryValue, { color: colors.primary, fontWeight: '700', fontSize: 18 }]}>
+                ${(parseFloat(params.price as string) + totalExtrasPrice + deliveryFee).toFixed(2)}
+              </Text>
+            </View>
           </View>
         </View>
 
@@ -609,6 +652,11 @@ export default function OrderDetailsScreen() {
               keyboardType="numeric"
               maxLength={5}
             />
+            {orderDetails.zipCode.length > 0 && orderDetails.zipCode.length < 5 && (
+              <Text style={[styles.errorText, { color: colors.error }]}>
+                Please enter a complete 5-digit ZIP code
+              </Text>
+            )}
         
             <TextInput
               style={[styles.input, styles.addressInput, { backgroundColor: colors.card, color: colors.text }]}
@@ -619,7 +667,13 @@ export default function OrderDetailsScreen() {
               multiline
               numberOfLines={3}
             />
-
+<TextInput
+              style={[styles.input, { backgroundColor: colors.card, color: colors.text }]}
+              placeholder="Building Number"
+              placeholderTextColor={colors.lightText}
+              value={orderDetails.buildingNumber}
+              onChangeText={(text) => setOrderDetails(prev => ({ ...prev, buildingNumber: text }))}
+            />
             <TextInput
               style={[styles.input, styles.notesInput, { backgroundColor: colors.card, color: colors.text }]}
               placeholder="Add any special notes or requests (optional)"
@@ -629,6 +683,8 @@ export default function OrderDetailsScreen() {
               multiline
               numberOfLines={3}
             />
+
+            
           </View>
         </View>
       </ScrollView>
@@ -870,6 +926,11 @@ const styles = StyleSheet.create({
   divideButtonText: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  errorText: {
+    fontSize: 12,
+    marginTop: 4,
+    marginLeft: 4,
   },
 }); 
 

@@ -115,26 +115,62 @@ Please keep this information for your records.
               <Text style={[styles.detailLabel, { color: colors.lightText }]}>Address:</Text>
               <Text style={[styles.detailValue, { color: colors.text }]}>{params.address}</Text>
             </View>
-            
+
             <View style={styles.detailRow}>
-              <Text style={[styles.detailLabel, { color: colors.lightText }]}>Animal:</Text>
-              <Text style={[styles.detailValue, { color: colors.text }]}>
-                {params.animalType} ({params.size})
-              </Text>
+              <Text style={[styles.detailLabel, { color: colors.lightText }]}>Animal Type:</Text>
+              <Text style={[styles.detailValue, { color: colors.text }]}>{params.animalType}</Text>
             </View>
-            
+
+            <View style={styles.detailRow}>
+              <Text style={[styles.detailLabel, { color: colors.lightText }]}>Size:</Text>
+              <Text style={[styles.detailValue, { color: colors.text }]}>{params.size}</Text>
+            </View>
+
             <View style={styles.detailRow}>
               <Text style={[styles.detailLabel, { color: colors.lightText }]}>Price Option:</Text>
               <Text style={[styles.detailValue, { color: colors.text }]}>{params.priceName}</Text>
             </View>
-            
+
             <View style={styles.detailRow}>
-              <Text style={[styles.detailLabel, { color: colors.lightText }]}>Total:</Text>
-              <Text style={[styles.detailValue, { color: colors.primary, fontWeight: '600' }]}>
-                ${params.finalPrice}
+              <Text style={[styles.detailLabel, { color: colors.lightText }]}>Base Price:</Text>
+              <Text style={[styles.detailValue, { color: colors.primary, fontWeight: '700' }]}>
+                ${params.price}
               </Text>
             </View>
-            
+
+            {params.selectedExtras && (
+              <>
+                <View style={styles.detailRow}>
+                  <Text style={[styles.detailLabel, { color: colors.lightText }]}>Additional Services:</Text>
+                  <View style={styles.extrasContainer}>
+                    {JSON.parse(params.selectedExtras as string).map((extra: any, index: number) => (
+                      <View key={index} style={styles.extraItem}>
+                        <Text style={[styles.extraTitle, { color: colors.text }]}>
+                          {extra.title}
+                        </Text>
+                        <Text style={[styles.extraPrice, { color: colors.primary }]}>
+                          ${extra.price.toFixed(2)}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={[styles.detailLabel, { color: colors.lightText }]}>Extras Total:</Text>
+                  <Text style={[styles.detailValue, { color: colors.primary }]}>
+                    ${params.totalExtrasPrice}
+                  </Text>
+                </View>
+              </>
+            )}
+
+            <View style={styles.detailRow}>
+              <Text style={[styles.detailLabel, { color: colors.lightText }]}>Delivery Fee:</Text>
+              <Text style={[styles.detailValue, { color: colors.primary }]}>
+                ${parseFloat(params.deliveryFee as string).toFixed(2)}
+              </Text>
+            </View>
+
             <View style={styles.detailRow}>
               <Text style={[styles.detailLabel, { color: colors.lightText }]}>Cutting Style:</Text>
               <Text style={[styles.detailValue, { color: colors.text }]}>{params.cuttingStyleName}</Text>
@@ -143,18 +179,48 @@ Please keep this information for your records.
             {params.selectedOrgans && (
               <View style={styles.detailRow}>
                 <Text style={[styles.detailLabel, { color: colors.lightText }]}>Selected Organs:</Text>
-                <Text style={[styles.detailValue, { color: colors.text }]}>{params.selectedOrgans}</Text>
+                <View style={styles.organsContainer}>
+                  {(typeof params.selectedOrgans === 'string' ? params.selectedOrgans.split(', ') : []).map((organ: string, index: number) => (
+                    <View key={index} style={styles.organChip}>
+                      <Text style={styles.organChipText}>{organ}</Text>
+                    </View>
+                  ))}
+                </View>
               </View>
             )}
 
-            {params.selectedExtras && (
+            <View style={styles.detailRow}>
+              <Text style={[styles.detailLabel, { color: colors.lightText }]}>Divided:</Text>
+              <Text style={[styles.detailValue, { color: colors.text }]}>{params.divided}</Text>
+            </View>
+
+            <View style={styles.detailRow}>
+              <Text style={[styles.detailLabel, { color: colors.lightText }]}>Delivery Date:</Text>
+              <Text style={[styles.detailValue, { color: colors.text }]}>
+                {params.deliveryDate ? new Date(params.deliveryDate as string).toLocaleDateString('en-US', {
+                  weekday: 'long',
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                }) : 'Not set'}
+              </Text>
+            </View>
+
+            {params.special_instructions && (
               <View style={styles.detailRow}>
-                <Text style={[styles.detailLabel, { color: colors.lightText }]}>Additional Services:</Text>
-                <Text style={[styles.detailValue, { color: colors.text }]}>
-                  {JSON.parse(params.selectedExtras as string).map((extra: any) => extra.title).join(', ')}
-                </Text>
+                <Text style={[styles.detailLabel, { color: colors.lightText }]}>Special Instructions:</Text>
+                <Text style={[styles.detailValue, { color: colors.text }]}>{params.special_instructions}</Text>
               </View>
             )}
+
+            <View style={styles.divider} />
+            
+            <View style={styles.detailRow}>
+              <Text style={[styles.detailLabel, { color: colors.text, fontWeight: '600' }]}>Final Price:</Text>
+              <Text style={[styles.detailValue, { color: colors.primary, fontWeight: '700', fontSize: 18 }]}>
+                ${params.finalPrice}
+              </Text>
+            </View>
           </View>
 
           {params.isGuest === 'true' && (
@@ -280,5 +346,46 @@ const styles = StyleSheet.create({
   },
   doneButton: {
     marginBottom: Platform.OS === 'ios' ? 16 : 0,
+  },
+  extrasContainer: {
+    flex: 1,
+    alignItems: 'flex-end',
+  },
+  extraItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  extraTitle: {
+    fontSize: 14,
+    marginRight: 8,
+  },
+  extraPrice: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  organsContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    gap: 8,
+  },
+  organChip: {
+    backgroundColor: Colors.light.primary + '20',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  organChipText: {
+    color: Colors.light.primary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    marginVertical: 12,
   },
 }); 
