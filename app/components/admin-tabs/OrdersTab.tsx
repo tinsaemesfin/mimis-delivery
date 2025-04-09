@@ -28,6 +28,7 @@ import * as XLSX from 'xlsx';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as MediaLibrary from 'expo-media-library';
+import Slider from '@react-native-community/slider';
 
 interface Order {
   id: string;
@@ -41,6 +42,7 @@ interface Order {
   divided?: string;
   phoneNumber?: string;
   address?: string;
+  building_number?: string;
   created_at?: string;
   user_id?: string;
   order_ticket?: string;
@@ -73,6 +75,8 @@ interface OrdersTabProps {
   onExport?: () => void;
   onEditOrder?: (order: Order) => void;
 }
+
+const ORDERS_PER_PAGE = 10;
 
 // Add permission request function
 const requestStoragePermission = async () => {
@@ -207,10 +211,14 @@ const exportToExcel = async (orders: Order[]) => {
   }
 };
 
-export default function OrdersTab({ orders, setSelectedOrder, openStatusModal, onExport, onEditOrder }: OrdersTabProps) {
+export default function OrdersTab({ orders: initialOrders, setSelectedOrder, openStatusModal, onExport, onEditOrder }: OrdersTabProps) {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme || 'light'];
   const [refreshing, setRefreshing] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMoreOrders, setHasMoreOrders] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [paginatedOrders, setPaginatedOrders] = useState<Order[]>([]);
 
   // Add filter state
   const [filterModalVisible, setFilterModalVisible] = useState(false);
@@ -231,7 +239,7 @@ export default function OrdersTab({ orders, setSelectedOrder, openStatusModal, o
 
   // Remove the old date filter states since they're now part of filters
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
-  const [filteredOrders, setFilteredOrders] = useState(orders);
+  const [filteredOrders, setFilteredOrders] = useState(initialOrders);
   const [calendarVisible, setCalendarVisible] = useState(false);
   const [selectingStartDate, setSelectingStartDate] = useState(true);
   const [orderDetailsVisible, setOrderDetailsVisible] = useState(false);
@@ -242,6 +250,12 @@ export default function OrdersTab({ orders, setSelectedOrder, openStatusModal, o
   // Add these state variables after other state declarations
   const [customerSuggestions, setCustomerSuggestions] = useState<string[]>([]);
   const [availableAnimals, setAvailableAnimals] = useState<{ id: string; title: string }[]>([]);
+
+  // Add new state variables
+  const [exportTypeModalVisible, setExportTypeModalVisible] = useState(false);
+  const [driversModalVisible, setDriversModalVisible] = useState(false);
+  const [numberOfDrivers, setNumberOfDrivers] = useState(1);
+  const [exportInProgress, setExportInProgress] = useState(false);
 
   // Add this effect to load animals from the database
   useEffect(() => {
@@ -266,7 +280,7 @@ export default function OrdersTab({ orders, setSelectedOrder, openStatusModal, o
   const handleCustomerSearch = (text: string) => {
     setFilters(f => ({ ...f, customerName: text }));
     if (text.length >= 2) {
-      const matches = [...new Set(orders
+      const matches = [...new Set(initialOrders
         .map(order => order.customerName)
         .filter(name => 
           name.toLowerCase().includes(text.toLowerCase())
@@ -365,7 +379,7 @@ export default function OrdersTab({ orders, setSelectedOrder, openStatusModal, o
   // Update the applyFilters function to handle single-day filtering
   const applyFilters = () => {
     setAppliedFilters(filters);
-    let results = [...orders];
+    let results = [...initialOrders];
     
     // Apply customer name filter
     if (filters.customerName) {
@@ -425,13 +439,13 @@ export default function OrdersTab({ orders, setSelectedOrder, openStatusModal, o
     };
     setFilters(emptyFilters);
     setAppliedFilters(emptyFilters);
-    setFilteredOrders(orders);
+    setFilteredOrders(initialOrders);
   };
 
   // Update useEffect for filters
   useEffect(() => {
     applyFilters();
-  }, [orders]); // Only reapply when orders change
+  }, [initialOrders]); // Only reapply when orders change
 
   // Add this function to remove a specific filter
   const removeFilter = (key: keyof FilterOptions) => {
@@ -553,7 +567,7 @@ export default function OrdersTab({ orders, setSelectedOrder, openStatusModal, o
       }
       
       // Update local state
-      const updatedOrders = orders.map(o => 
+      const updatedOrders = initialOrders.map(o => 
         o.id === order.id ? { ...o, status: newStatus } : o
       );
       setFilteredOrders(updatedOrders);
@@ -575,105 +589,251 @@ export default function OrdersTab({ orders, setSelectedOrder, openStatusModal, o
     }
   };
 
-  // Add handleExport function inside the component
-  const handleExport = async () => {
+  // Add new function to extract address components
+  const extractAddressComponents = (address: string) => {
+    if (!address) return { streetName: '', zipCode: '' };
+    
+    const parts = address.split(',').map(part => part.trim());
+    const zipCode = parts[parts.length - 1];
+    const streetName = parts.slice(0, -1).join(', ');
+    
+    return { streetName, zipCode };
+  };
+
+  // Add function to generate random color
+  const generateRandomColor = () => {
+    const letters = '0123456789ABCDEF';
+    let color = '#';
+    for (let i = 0; i < 6; i++) {
+      color += letters[Math.floor(Math.random() * 16)];
+    }
+    return color;
+  };
+
+  // Add function to format order details for note
+  const formatOrderNote = (order: Order) => {
+    const details = [
+      `Animal: ${order.animalType}`,
+      `Size: ${order.size}`,
+      `Cut Style: ${order.cutStyle}`,
+      `Divided: ${order.divided}`,
+      order.organs?.length ? `Organs: ${order.organs.join(', ')}` : null,
+      order.extras?.length ? `Additional Services: ${order.extras.map(e => `${e.title} ($${e.price})`).join(', ')}` : null,
+      `Base Price: $${order.price_option?.price || 0}`,
+      `Delivery Fee: $${order.delivery_fee}`,
+      `Total: $${order.total}`,
+      order.special_instructions ? `Special Instructions: ${order.special_instructions}` : null
+    ].filter(Boolean).join(' | ');
+
+    return details.length > 1000 ? details.substring(0, 997) + '...' : details;
+  };
+
+  // Add function to group orders by proximity
+  const groupOrdersByProximity = (orders: Order[], numberOfDrivers: number) => {
+    if (orders.length < numberOfDrivers) {
+      throw new Error('Cannot assign more drivers than orders');
+    }
+
+    // Sort orders by zipcode to keep nearby deliveries together
+    const sortedOrders = [...orders].sort((a, b) => {
+      const zipA = extractAddressComponents(a.address || '').zipCode;
+      const zipB = extractAddressComponents(b.address || '').zipCode;
+      return zipA.localeCompare(zipB);
+    });
+
+    // Distribute orders among drivers
+    const ordersPerDriver = Math.ceil(sortedOrders.length / numberOfDrivers);
+    const groups: Order[][] = [];
+
+    for (let i = 0; i < numberOfDrivers; i++) {
+      const start = i * ordersPerDriver;
+      const end = Math.min(start + ordersPerDriver, sortedOrders.length);
+      if (start < sortedOrders.length) {
+        groups.push(sortedOrders.slice(start, end));
+      }
+    }
+
+    return groups;
+  };
+
+  // Add function to export RoadWarrior format
+  const exportToRoadWarrior = async (orders: Order[], numberOfDrivers: number) => {
     try {
-      if (filteredOrders.length === 0) {
-        Alert.alert('No Orders', 'There are no orders to export.');
-        return;
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== 'granted') {
+        throw new Error('Storage permission not granted');
       }
 
-      Alert.alert(
-        'Export Orders',
-        `Export ${filteredOrders.length} orders to Excel?`,
-        [
-          {
-            text: 'Cancel',
-            style: 'cancel'
-          },
-          {
-            text: 'Export',
-            onPress: async () => {
-              try {
-                await exportToExcel(filteredOrders);
-                Alert.alert(
-                  'Success', 
-                  'Orders exported successfully!\n\n' +
-                  'Please select where to save or share the file from the share sheet.'
-                );
-              } catch (error) {
-                console.error('Export error:', error);
-                if (error instanceof Error) {
-                  if (error.message === 'Storage permission not granted') {
-                    Alert.alert(
-                      'Permission Required',
-                      'Please grant storage permission to save Excel files to your device.'
-                    );
-                  } else if (error.message === 'Sharing is not available on this device') {
-                    Alert.alert(
-                      'Error',
-                      'Sharing is not available on this device. Please try using a development build or the production app.'
-                    );
-                  } else {
-                    Alert.alert(
-                      'Export Failed',
-                      'Failed to export orders. Please try again.'
-                    );
-                  }
-                } else {
-                  Alert.alert(
-                    'Export Failed',
-                    'An unexpected error occurred. Please try again.'
-                  );
-                }
-              }
-            }
-          }
-        ]
-      );
+      // Validate number of drivers
+      if (orders.length < numberOfDrivers) {
+        throw new Error(`Cannot assign ${numberOfDrivers} drivers to ${orders.length} orders`);
+      }
+
+      // Group orders by proximity
+      const orderGroups = groupOrdersByProximity(orders, numberOfDrivers);
+
+      // Export a file for each driver
+      for (let i = 0; i < orderGroups.length; i++) {
+        const driverOrders = orderGroups[i];
+        
+        // Transform orders data for Excel
+        const excelData = driverOrders.map(order => ({
+          'Name': order.customerName,
+          'Building/House Number': order.building_number || '',
+          'Street Name': extractAddressComponents(order.address || '').streetName,
+          'City': 'Seattle',
+          'State/Region': 'DC',
+          'Postal': extractAddressComponents(order.address || '').zipCode,
+          'Country': 'US (UNITED STATES)',
+          'Color': generateRandomColor(),
+          'Phone': order.phoneNumber || '',
+          'Note': formatOrderNote(order),
+          'Latitude': '',
+          'Longitude': '',
+          'Visit Time': ''
+        }));
+
+        // Create worksheet
+        const ws = XLSX.utils.json_to_sheet(excelData);
+
+        // Set column widths
+        const columnWidths = [
+          { wch: 20 }, // Name
+          { wch: 15 }, // Building/House Number
+          { wch: 30 }, // Street Name
+          { wch: 15 }, // City
+          { wch: 15 }, // State/Region
+          { wch: 10 }, // Postal
+          { wch: 20 }, // Country
+          { wch: 10 }, // Color
+          { wch: 15 }, // Phone
+          { wch: 50 }, // Note
+          { wch: 10 }, // Latitude
+          { wch: 10 }, // Longitude
+          { wch: 10 }, // Visit Time
+        ];
+        ws['!cols'] = columnWidths;
+
+        // Create workbook
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, `Driver ${i + 1}`);
+
+        // Generate Excel file
+        const excelFile = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
+
+        // Get current date for filename
+        const currentDate = format(new Date(), 'yyyy-MM-dd_HH-mm');
+        const fileName = `roadwarrior_driver${i + 1}_${currentDate}.xlsx`;
+
+        // Save file
+        const filePath = `${FileSystem.cacheDirectory}${fileName}`;
+        await FileSystem.writeAsStringAsync(filePath, excelFile, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+
+        // Share the file
+        await Sharing.shareAsync(filePath, {
+          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          dialogTitle: `Export Orders - Driver ${i + 1}`,
+          UTI: 'com.microsoft.excel.xlsx'
+        });
+
+        // Clean up the cache file
+        try {
+          await FileSystem.deleteAsync(filePath, { idempotent: true });
+        } catch (err) {
+          console.warn('Could not clean up cache file:', err);
+        }
+      }
+
+      return true;
     } catch (error) {
       console.error('Export error:', error);
-      Alert.alert('Error', 'Failed to export orders. Please try again.');
+      throw error;
     }
   };
 
-  // Update the renderPriceBreakdown function
-  const renderPriceBreakdown = (order: Order) => {
-    const basePrice = order.price_option?.price || 0;
-    const extrasTotal = order.extras?.reduce((sum: number, extra: { price: number }) => sum + extra.price, 0) || 0;
-    const deliveryFee = order.delivery_fee || 0; // Ensure we have a value even if undefined
+  // Update handleExport function
+  const handleExport = async () => {
+    if (filteredOrders.length === 0) {
+      Alert.alert('No Orders', 'There are no orders to export.');
+      return;
+    }
+
+    setExportTypeModalVisible(true);
+  };
+
+  // Add function to handle export type selection
+  const handleExportTypeSelection = (type: 'store' | 'roadwarrior') => {
+    setExportTypeModalVisible(false);
     
-    return (
-      <View style={styles.priceBreakdown}>
-        <View style={styles.priceRow}>
-          <Text style={styles.priceLabel}>Base Price:</Text>
-          <Text style={styles.priceValue}>${basePrice.toFixed(2)}</Text>
-        </View>
-        
-        {order.extras && order.extras.length > 0 && (
-          <>
-            <Text style={styles.priceLabel}>Additional Services:</Text>
-            {order.extras.map((extra, index) => (
-              <View key={index} style={styles.priceRow}>
-                <Text style={styles.priceLabel}>- {extra.title}:</Text>
-                <Text style={styles.priceValue}>${extra.price.toFixed(2)}</Text>
-              </View>
-            ))}
-          </>
-        )}
-        
-        {/* Always show delivery fee */}
-        <View style={styles.priceRow}>
-          <Text style={styles.priceLabel}>Delivery Fee:</Text>
-          <Text style={styles.priceValue}>${deliveryFee.toFixed(2)}</Text>
-        </View>
-        
-        <View style={[styles.priceRow, styles.totalRow]}>
-          <Text style={styles.totalLabel}>Total:</Text>
-          <Text style={styles.totalValue}>${(basePrice + extrasTotal + deliveryFee).toFixed(2)}</Text>
-        </View>
-      </View>
-    );
+    if (type === 'store') {
+      // Continue with existing export logic
+      handleStoreExport();
+    } else {
+      // Show drivers selection modal
+      setDriversModalVisible(true);
+    }
+  };
+
+  // Add function to handle store export (existing logic)
+  const handleStoreExport = async () => {
+    try {
+      await exportToExcel(filteredOrders);
+      Alert.alert(
+        'Success', 
+        'Orders exported successfully!\n\n' +
+        'Please select where to save or share the file from the share sheet.'
+      );
+    } catch (error) {
+      console.error('Export error:', error);
+      if (error instanceof Error) {
+        if (error.message === 'Storage permission not granted') {
+          Alert.alert(
+            'Permission Required',
+            'Please grant storage permission to save Excel files to your device.'
+          );
+        } else if (error.message === 'Sharing is not available on this device') {
+          Alert.alert(
+            'Error',
+            'Sharing is not available on this device. Please try using a development build or the production app.'
+          );
+        } else {
+          Alert.alert(
+            'Export Failed',
+            'Failed to export orders. Please try again.'
+          );
+        }
+      } else {
+        Alert.alert(
+          'Export Failed',
+          'An unexpected error occurred. Please try again.'
+        );
+      }
+    }
+  };
+
+  // Add function to handle road warrior export
+  const handleRoadWarriorExport = async () => {
+    setDriversModalVisible(false);
+    setExportInProgress(true);
+    
+    try {
+      await exportToRoadWarrior(filteredOrders, numberOfDrivers);
+      Alert.alert(
+        'Success',
+        `Orders have been exported successfully for ${numberOfDrivers} driver${numberOfDrivers > 1 ? 's' : ''}!`
+      );
+    } catch (error) {
+      console.error('Export error:', error);
+      if (error instanceof Error) {
+        Alert.alert('Export Failed', error.message);
+      } else {
+        Alert.alert('Export Failed', 'An unexpected error occurred. Please try again.');
+      }
+    } finally {
+      setExportInProgress(false);
+    }
   };
 
   // Add onRefresh function
@@ -710,6 +870,8 @@ export default function OrdersTab({ orders, setSelectedOrder, openStatusModal, o
 
       if (error) throw error;
 
+      console.log('Raw order data:', data[0]); // Log first order to check fields
+
       // Fetch extras for orders that have them
       const ordersWithExtras = await Promise.all(
         data.map(async (order) => {
@@ -733,8 +895,10 @@ export default function OrdersTab({ orders, setSelectedOrder, openStatusModal, o
         })
       );
 
+      console.log('Order with extras:', ordersWithExtras[0]); // Log first order after extras
+
       // Transform and update orders
-      const formattedOrders = ordersWithExtras.map(order => ({
+      const formattedOrders: Order[] = ordersWithExtras.map(order => ({
         id: order.id,
         customerName: order.customer_name || 'Unknown',
         date: order.created_at,
@@ -748,6 +912,7 @@ export default function OrdersTab({ orders, setSelectedOrder, openStatusModal, o
         divided: order.divided ? 'Yes' : 'No',
         phoneNumber: order.phone_number || '',
         address: order.address || '',
+        building_number: order.building_number || '',
         user_id: order.user_id,
         order_ticket: order.order_ticket,
         created_at: order.created_at,
@@ -757,6 +922,8 @@ export default function OrdersTab({ orders, setSelectedOrder, openStatusModal, o
         price_option: order.price_option,
         delivery_fee: order.delivery_fee || 0
       }));
+
+      console.log('Formatted order:', formattedOrders[0]); // Log first formatted order
 
       // Update the orders through the prop callback
       setSelectedOrder(null); // Clear any selected order
@@ -768,6 +935,60 @@ export default function OrdersTab({ orders, setSelectedOrder, openStatusModal, o
       setRefreshing(false);
     }
   }, [setSelectedOrder]);
+
+  // Add useEffect to handle initial pagination
+  useEffect(() => {
+    if (filteredOrders.length > 0) {
+      const initialBatch = filteredOrders.slice(0, ORDERS_PER_PAGE);
+      setPaginatedOrders(initialBatch);
+      setHasMoreOrders(filteredOrders.length > ORDERS_PER_PAGE);
+      setCurrentPage(1);
+    } else {
+      setPaginatedOrders([]);
+      setHasMoreOrders(false);
+      setCurrentPage(1);
+    }
+  }, [filteredOrders]);
+
+  // Add function to load more orders
+  const loadMoreOrders = () => {
+    if (!hasMoreOrders || isLoadingMore) return;
+
+    setIsLoadingMore(true);
+    const nextPage = currentPage + 1;
+    const startIndex = (nextPage - 1) * ORDERS_PER_PAGE;
+    const endIndex = startIndex + ORDERS_PER_PAGE;
+    const nextBatch = filteredOrders.slice(startIndex, endIndex);
+
+    if (nextBatch.length > 0) {
+      setPaginatedOrders(prev => [...prev, ...nextBatch]);
+      setCurrentPage(nextPage);
+      setHasMoreOrders(endIndex < filteredOrders.length);
+    } else {
+      setHasMoreOrders(false);
+    }
+
+    setIsLoadingMore(false);
+  };
+
+  // Add function to handle refresh
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await onRefresh();
+    setRefreshing(false);
+  };
+
+  // Add loading footer component
+  const renderFooter = () => {
+    if (!isLoadingMore) return null;
+
+    return (
+      <View style={styles.loadingFooter}>
+        <ActivityIndicator size="small" color={colors.primary} />
+        <Text style={[styles.loadingText, { color: colors.text }]}>Loading more orders...</Text>
+      </View>
+    );
+  };
 
   return (
     <View style={styles.tabContent}>
@@ -795,7 +1016,7 @@ export default function OrdersTab({ orders, setSelectedOrder, openStatusModal, o
       </View>
       
       <FlatList
-        data={filteredOrders}
+        data={paginatedOrders}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <TouchableOpacity
@@ -823,11 +1044,14 @@ export default function OrdersTab({ orders, setSelectedOrder, openStatusModal, o
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={onRefresh}
+            onRefresh={handleRefresh}
             colors={[colors.primary]}
             tintColor={colors.primary}
           />
         }
+        onEndReached={loadMoreOrders}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={renderFooter}
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Text style={[styles.emptyText, { color: colors.lightText }]}>
@@ -975,6 +1199,18 @@ export default function OrdersTab({ orders, setSelectedOrder, openStatusModal, o
                             <Text style={[styles.detailLabel, { color: colors.lightText }]}>Delivery Address</Text>
                             <Text style={[styles.detailValue, { color: colors.text }]}>
                               {selectedOrderDetails.address || 'Not provided'}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+
+                      <View style={styles.detailRow}>
+                        <View style={styles.detailItem}>
+                          <Ionicons name="caret-back-outline" size={20} color={colors.primary} />
+                          <View style={styles.detailTextContainer}>
+                            <Text style={[styles.detailLabel, { color: colors.lightText }]}>Building</Text>
+                            <Text style={[styles.detailValue, { color: colors.text }]}>
+                              {selectedOrderDetails.building_number || 'Not provided'}
                             </Text>
                           </View>
                         </View>
@@ -1336,6 +1572,101 @@ export default function OrdersTab({ orders, setSelectedOrder, openStatusModal, o
                 <Text style={[styles.filterModalButtonText, { color: 'white' }]}>Apply Filters</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Add Export Type Modal */}
+      <Modal
+        visible={exportTypeModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setExportTypeModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.exportTypeModal, { backgroundColor: colors.background }]}>
+            <Text style={[styles.exportTypeTitle, { color: colors.text }]}>
+              Select Export Type
+            </Text>
+            
+            <TouchableOpacity
+              style={[styles.exportTypeButton, { backgroundColor: colors.card }]}
+              onPress={() => handleExportTypeSelection('store')}
+            >
+              <Ionicons name="document-outline" size={24} color={colors.primary} />
+              <Text style={[styles.exportTypeButtonText, { color: colors.text }]}>
+                Store Data
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.exportTypeButton, { backgroundColor: colors.card }]}
+              onPress={() => handleExportTypeSelection('roadwarrior')}
+            >
+              <Ionicons name="car-outline" size={24} color={colors.primary} />
+              <Text style={[styles.exportTypeButtonText, { color: colors.text }]}>
+                RoadWarrior Format
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.cancelButton, { backgroundColor: colors.card }]}
+              onPress={() => setExportTypeModalVisible(false)}
+            >
+              <Text style={[styles.cancelButtonText, { color: colors.text }]}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Add Drivers Selection Modal */}
+      <Modal
+        visible={driversModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setDriversModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.driversModal, { backgroundColor: colors.background }]}>
+            <Text style={[styles.driversModalTitle, { color: colors.text }]}>
+              Select Number of Drivers
+            </Text>
+
+            <View style={styles.driversSliderContainer}>
+              <Slider
+                style={styles.driversSlider}
+                minimumValue={1}
+                maximumValue={5}
+                step={1}
+                value={numberOfDrivers}
+                onValueChange={setNumberOfDrivers}
+                minimumTrackTintColor={colors.primary}
+                maximumTrackTintColor={colors.border}
+                thumbTintColor={colors.primary}
+              />
+              <Text style={[styles.driversCount, { color: colors.text }]}>
+                {numberOfDrivers} Driver{numberOfDrivers > 1 ? 's' : ''}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.exportButton, { backgroundColor: colors.primary }]}
+              onPress={handleRoadWarriorExport}
+              disabled={exportInProgress}
+            >
+              {exportInProgress ? (
+                <ActivityIndicator color="white" />
+              ) : (
+                <Text style={styles.exportButtonText}>Export</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.cancelButton, { backgroundColor: colors.card }]}
+              onPress={() => setDriversModalVisible(false)}
+            >
+              <Text style={[styles.cancelButtonText, { color: colors.text }]}>Cancel</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -1917,4 +2248,75 @@ const styles = StyleSheet.create({
   filterModalBody: {
     flex: 1,
   },
+  exportTypeModal: {
+    width: '80%',
+    padding: 20,
+    borderRadius: 12,
+  },
+  exportTypeTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    marginBottom: 20,
+  },
+  exportTypeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  exportTypeButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  cancelButton: {
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  driversModal: {
+    width: '80%',
+    padding: 20,
+    borderRadius: 12,
+  },
+  driversModalTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  driversSliderContainer: {
+    marginBottom: 20,
+  },
+  driversSlider: {
+    width: '100%',
+    height: 40,
+  },
+  driversCount: {
+    fontSize: 16,
+    fontWeight: '500',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  exportButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: 'white',
+  },
+  loadingFooter: {
+    flexDirection: 'row' as const,
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+    padding: 16,
+    gap: 8,
+  } as ViewStyle,
+  loadingText: {
+    fontSize: 14,
+  } as TextStyle,
 }); 
