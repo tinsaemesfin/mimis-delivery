@@ -23,10 +23,16 @@
             "CFBundleURLSchemes": [
               "mimisdelivery"
             ]
+          },
+          {
+            "CFBundleURLSchemes": [
+              "mimisdelivery"
+            ]
           }
         ],
         "NSPhotoLibraryUsageDescription": "We need access to save Excel files to your device.",
-        "NSPhotoLibraryAddUsageDescription": "We need access to save Excel files to your device."
+        "NSPhotoLibraryAddUsageDescription": "We need access to save Excel files to your device.",
+        "ITSAppUsesNonExemptEncryption": false
       },
       "runtimeVersion": {
         "policy": "appVersion"
@@ -42,7 +48,10 @@
       "runtimeVersion": "1.0.2",
       "permissions": [
         "WRITE_EXTERNAL_STORAGE",
-        "READ_EXTERNAL_STORAGE"
+        "READ_EXTERNAL_STORAGE",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.ACCESS_MEDIA_LOCATION"
       ],
       "intentFilters": [
         {
