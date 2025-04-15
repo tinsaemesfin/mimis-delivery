@@ -2,7 +2,7 @@
   "expo": {
     "name": "Mimis Delivery",
     "slug": "mimis-delivery",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "light",
@@ -38,7 +38,8 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.mimisdelivery.app",
-      "versionCode": 2,
+      "versionCode": 3,
+      "runtimeVersion": "1.0.2",
       "permissions": [
         "WRITE_EXTERNAL_STORAGE",
         "READ_EXTERNAL_STORAGE"
@@ -57,8 +58,7 @@
             "DEFAULT"
           ]
         }
-      ],
-      "runtimeVersion": "1.0.0"
+      ]
     },
     "web": {
       "favicon": "./assets/images/favicon.png"

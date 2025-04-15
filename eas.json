@@ -34,10 +34,19 @@
       },
       "android": {
         "buildType": "apk"
+      },
+      "ios": {
+        "simulator": false
       }
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "appleId": "wondrad2@yahoo.com",
+        "ascAppId": "6744637244 ",
+        "appleTeamId": "7PAZAACAVB"
+      }
+    }
   }
 }
