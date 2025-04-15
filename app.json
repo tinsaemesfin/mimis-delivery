@@ -2,7 +2,7 @@
   "expo": {
     "name": "Mimis Delivery",
     "slug": "mimis-delivery",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "light",
@@ -17,6 +17,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.mimisdelivery.app",
+      "buildNumber": "4",
       "infoPlist": {
         "CFBundleURLTypes": [
           {
@@ -44,8 +45,8 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.mimisdelivery.app",
-      "versionCode": 3,
-      "runtimeVersion": "1.0.2",
+      "versionCode": 4,
+      "runtimeVersion": "1.0.3",
       "permissions": [
         "WRITE_EXTERNAL_STORAGE",
         "READ_EXTERNAL_STORAGE",

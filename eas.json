@@ -30,7 +30,9 @@
       "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://kpsfqfntcfxejipieres.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "WILL_BE_REPLACED_DURING_BUILD"
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtwc2ZxZm50Y2Z4ZWppcGllcmVzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDEzMjQ4NDksImV4cCI6MjA1NjkwMDg0OX0.IfUhzmECCR7n26StBzoSqswfNLJBlqhIGVaUF2UiXrs",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "698788769052-5nac7kd4cabgtd1scmtg7fb0i28b5otg.apps.googleusercontent.com",
+        "SITE_URL": "https://mimisdelivery.aradatech.com"
       },
       "android": {
         "buildType": "apk"
@@ -44,7 +46,7 @@
     "production": {
       "ios": {
         "appleId": "wondrad2@yahoo.com",
-        "ascAppId": "6744637244 ",
+        "ascAppId": "6744637244",
         "appleTeamId": "7PAZAACAVB"
       }
     }
