@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { 
   StyleSheet, 
   View, 
@@ -8,7 +8,8 @@ import {
   ScrollView, 
   Dimensions, 
   SafeAreaView,
-  Platform
+  Platform,
+  Animated
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -25,11 +26,29 @@ export default function HomeScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme || 'light'];
+  const scaleAnim = new Animated.Value(1);
 
   const handleStartOrder = () => {
     // Navigate directly to animal selection
     router.push('/animal-selection');
   };
+
+  useEffect(() => {
+    const pulseAnimation = Animated.sequence([
+      Animated.timing(scaleAnim, {
+        toValue: 1.05,
+        duration: 1000,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 1,
+        duration: 1000,
+        useNativeDriver: true,
+      }),
+    ]);
+
+    Animated.loop(pulseAnimation).start();
+  }, []);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -77,8 +96,8 @@ export default function HomeScreen() {
             </Text>
 
             <View style={styles.featuresContainer}>
-              <View style={[styles.featureRow, { backgroundColor: colors.card }]}>
-                <View style={[styles.featureIconContainer, { backgroundColor: colors.primary + '20' }]}>
+              <View style={styles.featureRow}>
+                <View style={[styles.featureIconContainer, { backgroundColor: colors.primary + '10' }]}>
                   <MaterialCommunityIcons name="sheep" size={24} color={colors.primary} />
                 </View>
                 <View style={styles.featureTextContainer}>
@@ -89,9 +108,9 @@ export default function HomeScreen() {
                 </View>
               </View>
 
-              <View style={[styles.featureRow, { backgroundColor: colors.card }]}>
-                <View style={[styles.featureIconContainer, { backgroundColor: colors.primary + '20' }]}>
-                  <MaterialCommunityIcons name="food-steak" size={24} color={colors.primary} />
+              <View style={styles.featureRow}>
+                <View style={[styles.featureIconContainer, { backgroundColor: colors.primary + '10' }]}>
+                  <MaterialCommunityIcons name="knife" size={24} color={colors.primary} />
                 </View>
                 <View style={styles.featureTextContainer}>
                   <Text style={[styles.featureTitle, { color: colors.text }]}>Custom Cuts</Text>
@@ -101,8 +120,8 @@ export default function HomeScreen() {
                 </View>
               </View>
 
-              <View style={[styles.featureRow, { backgroundColor: colors.card }]}>
-                <View style={[styles.featureIconContainer, { backgroundColor: colors.primary + '20' }]}>
+              <View style={styles.featureRow}>
+                <View style={[styles.featureIconContainer, { backgroundColor: colors.primary + '10' }]}>
                   <Ionicons name="time" size={24} color={colors.primary} />
                 </View>
                 <View style={styles.featureTextContainer}>
@@ -117,18 +136,20 @@ export default function HomeScreen() {
         </ScrollView>
 
         {/* Floating Action Button */}
-        <TouchableOpacity
-          style={[
-            styles.floatingButton,
-            { backgroundColor: colors.primary },
-            createShadow('0.3')
-          ]}
-          onPress={handleStartOrder}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="restaurant-outline" size={24} color="white" style={styles.buttonIcon} />
-          <Text style={styles.buttonText}>Start Your Order</Text>
-        </TouchableOpacity>
+        <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+          <TouchableOpacity
+            style={[
+              styles.floatingButton,
+              { backgroundColor: colors.primary },
+              createShadow('0.5')
+            ]}
+            onPress={handleStartOrder}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="restaurant-outline" size={28} color="white" style={styles.buttonIcon} />
+            <Text style={styles.buttonText}>Start Your Order</Text>
+          </TouchableOpacity>
+        </Animated.View>
       </View>
     </SafeAreaView>
   );
@@ -192,19 +213,19 @@ const styles = StyleSheet.create({
   },
   featuresContainer: {
     marginBottom: 30,
+    paddingHorizontal: 8,
   },
   featureRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 16,
-    ...createShadow(),
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.05)',
   },
   featureIconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 16,
@@ -213,13 +234,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   featureTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
     marginBottom: 4,
   },
   featureDescription: {
     fontSize: 14,
     lineHeight: 20,
+    opacity: 0.8,
   },
   button: {
     height: 56,
@@ -233,29 +255,29 @@ const styles = StyleSheet.create({
     bottom: Platform.OS === 'ios' ? 20 : 16,
     left: 16,
     right: 16,
-    height: 56,
-    borderRadius: 28,
+    height: 60,
+    borderRadius: 30,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 4,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 6,
       },
       android: {
-        elevation: 4,
+        elevation: 8,
       },
     }),
   },
   buttonIcon: {
-    marginRight: 8,
+    marginRight: 10,
   },
   buttonText: {
     color: 'white',
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: '700',
   },
 });
