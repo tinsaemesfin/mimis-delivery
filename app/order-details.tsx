@@ -665,7 +665,7 @@ export default function OrderDetailsScreen() {
               multiline
               numberOfLines={3}
             />
-            <TextInput
+<TextInput
               style={[styles.input, { backgroundColor: colors.card, color: colors.text }]}
               placeholder="Building Number (Optional)"
               placeholderTextColor={colors.lightText}
