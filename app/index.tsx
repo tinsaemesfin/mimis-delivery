@@ -43,7 +43,8 @@ export default function Index() {
 
   // Redirect based on authentication status
   if (!user) {
-    return <Redirect href="/sign-in" />;
+    // Allow guest access - redirect to main tabs instead of sign-in
+    return <Redirect href="/(tabs)" />;
   }
 
   // Redirect based on user role

@@ -74,6 +74,7 @@ interface OrdersTabProps {
   openStatusModal: (order: Order) => void;
   onExport?: () => void;
   onEditOrder?: (order: Order) => void;
+  isSuperAdmin?: boolean; // Add this prop
 }
 
 const ORDERS_PER_PAGE = 10;
@@ -119,6 +120,7 @@ const exportToExcel = async (orders: Order[]) => {
       'Customer Name': order.customerName,
       'Phone Number': order.phoneNumber || 'N/A',
       'Address': order.address || 'N/A',
+      'Building Number': order.building_number || 'Not found',
       'Order Date': format(parseISO(order.date), 'MMM dd, yyyy'),
       'Status': order.status.charAt(0).toUpperCase() + order.status.slice(1),
       'Animal Type': order.animalType,
@@ -142,6 +144,7 @@ const exportToExcel = async (orders: Order[]) => {
       { wch: 20 }, // Customer Name
       { wch: 15 }, // Phone Number
       { wch: 30 }, // Address
+      { wch: 15 }, // Building Number
       { wch: 15 }, // Order Date
       { wch: 12 }, // Status
       { wch: 15 }, // Animal Type
@@ -211,7 +214,7 @@ const exportToExcel = async (orders: Order[]) => {
   }
 };
 
-export default function OrdersTab({ orders: initialOrders, setSelectedOrder, openStatusModal, onExport, onEditOrder }: OrdersTabProps) {
+export default function OrdersTab({ orders: initialOrders, setSelectedOrder, openStatusModal, onExport, onEditOrder, isSuperAdmin }: OrdersTabProps) {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme || 'light'];
   const [refreshing, setRefreshing] = useState(false);
@@ -303,6 +306,7 @@ export default function OrdersTab({ orders: initialOrders, setSelectedOrder, ope
         endDate: selectedDate 
       }));
       setSelectingStartDate(false);
+      // Don't close calendar immediately, let user select end date or close manually
     } else {
       // If selecting end date and it's before start date, swap them
       if (filters.startDate && selectedDate < filters.startDate) {
@@ -315,6 +319,10 @@ export default function OrdersTab({ orders: initialOrders, setSelectedOrder, ope
         setFilters(f => ({ ...f, endDate: selectedDate }));
       }
       setCalendarVisible(false);
+      // Reopen filter modal after a short delay
+      setTimeout(() => {
+        setFilterModalVisible(true);
+      }, 50);
     }
   };
 
@@ -449,10 +457,66 @@ export default function OrdersTab({ orders: initialOrders, setSelectedOrder, ope
 
   // Add this function to remove a specific filter
   const removeFilter = (key: keyof FilterOptions) => {
-    const newFilters = { ...appliedFilters, [key]: '' };
+    let newFilters: FilterOptions;
+    
+    if (key === 'startDate' || key === 'endDate') {
+      // For date filters, set both to null
+      newFilters = { ...appliedFilters, startDate: null, endDate: null };
+    } else {
+      // For other filters, set to empty string
+      newFilters = { ...appliedFilters, [key]: key === 'status' ? null : '' };
+    }
+    
     setFilters(newFilters);
     setAppliedFilters(newFilters);
-    applyFilters();
+    
+    // Apply filters directly with the new filter values instead of calling applyFilters()
+    let results = [...initialOrders];
+    
+    // Apply customer name filter
+    if (newFilters.customerName) {
+      results = results.filter(order => 
+        order.customerName.toLowerCase().includes(newFilters.customerName.toLowerCase())
+      );
+    }
+    
+    // Apply animal type filter
+    if (newFilters.animalType) {
+      results = results.filter(order => 
+        order.animalType?.toLowerCase().includes(newFilters.animalType.toLowerCase())
+      );
+    }
+    
+    // Apply status filter
+    if (newFilters.status) {
+      results = results.filter(order => order.status === newFilters.status);
+    }
+    
+    // Apply date filter
+    if (newFilters.startDate) {
+      try {
+        const start = parseISO(newFilters.startDate);
+        const end = newFilters.endDate ? parseISO(newFilters.endDate) : start;
+        
+        // Set the time to start of day for start date and end of day for end date
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
+        
+        results = results.filter(order => {
+          try {
+            const orderDate = parseISO(order.date);
+            return isWithinInterval(orderDate, { start, end });
+          } catch (e) {
+            console.warn('Error parsing order date:', e);
+            return false;
+          }
+        });
+      } catch (e) {
+        console.warn('Error with date filtering:', e);
+      }
+    }
+    
+    setFilteredOrders(results);
   };
 
   // Update the renderFilterBadges function
@@ -503,10 +567,7 @@ export default function OrdersTab({ orders: initialOrders, setSelectedOrder, ope
         {appliedFilters.startDate && appliedFilters.endDate && (
           <TouchableOpacity 
             style={[styles.filterBadge, { backgroundColor: colors.primary + '20' }]}
-            onPress={() => {
-              setFilters(f => ({ ...f, startDate: null, endDate: null }));
-              applyFilters();
-            }}
+            onPress={() => removeFilter('startDate')}
           >
             <Text style={[styles.filterBadgeText, { color: colors.primary }]}>
               {formatDate(appliedFilters.startDate)} - {formatDate(appliedFilters.endDate)}
@@ -679,7 +740,7 @@ export default function OrdersTab({ orders: initialOrders, setSelectedOrder, ope
         // Transform orders data for Excel
         const excelData = driverOrders.map(order => ({
           'Name': order.customerName,
-          'Building/House Number': order.building_number || '',
+          'Building/House Number': order.building_number || 'Not found',
           'Street Name': extractAddressComponents(order.address || '').streetName,
           'City': 'Seattle',
           'State/Region': 'DC',
@@ -1080,7 +1141,7 @@ export default function OrdersTab({ orders: initialOrders, setSelectedOrder, ope
                 </View>
               </View>
               <View style={styles.modalHeaderButtons}>
-                {onEditOrder && selectedOrderDetails && (
+                {onEditOrder && selectedOrderDetails && isSuperAdmin && (
                   <TouchableOpacity 
                     style={[styles.modalActionButton, { backgroundColor: colors.secondary }]}
                     onPress={() => {
@@ -1354,16 +1415,37 @@ export default function OrdersTab({ orders: initialOrders, setSelectedOrder, ope
         visible={calendarVisible}
         transparent={true}
         animationType="slide"
-        onRequestClose={() => setCalendarVisible(false)}
+        onRequestClose={() => {
+          setCalendarVisible(false);
+          // Reopen filter modal if it was closed
+          setTimeout(() => {
+            setFilterModalVisible(true);
+          }, 50);
+        }}
+        presentationStyle="overFullScreen"
       >
-        <View style={styles.modalOverlay}>
+        <View style={styles.calendarModalOverlay}>
           <View style={[styles.calendarContainer, { backgroundColor: colors.background }]}>
             <View style={styles.calendarHeader}>
               <Text style={[styles.calendarTitle, { color: colors.text }]}>
-                Select {selectingStartDate ? 'Start' : 'End'} Date
+                {selectingStartDate 
+                  ? 'Select Start Date' 
+                  : `Start: ${filters.startDate ? format(parseISO(filters.startDate), 'MMM dd') : ''} - Select End Date`
+                }
               </Text>
-              <TouchableOpacity onPress={() => setCalendarVisible(false)}>
-                <Text style={[styles.closeButton, { color: colors.primary }]}>Close</Text>
+              <TouchableOpacity 
+                onPress={() => {
+                  setCalendarVisible(false);
+                  // Reopen filter modal
+                  setTimeout(() => {
+                    setFilterModalVisible(true);
+                  }, 50);
+                }}
+                style={styles.calendarCloseButton}
+              >
+                <Text style={[styles.closeButton, { color: colors.primary }]}>
+                  {selectingStartDate || filters.startDate !== filters.endDate ? 'Close' : 'Done'}
+                </Text>
               </TouchableOpacity>
             </View>
             
@@ -1371,6 +1453,10 @@ export default function OrdersTab({ orders: initialOrders, setSelectedOrder, ope
               onDayPress={handleDateSelect}
               markedDates={getMarkedDates()}
               markingType="period"
+              enableSwipeMonths={true}
+              hideArrows={false}
+              disableMonthChange={false}
+              monthFormat={'MMMM yyyy'}
               theme={{
                 backgroundColor: colors.background,
                 calendarBackground: colors.background,
@@ -1406,8 +1492,8 @@ export default function OrdersTab({ orders: initialOrders, setSelectedOrder, ope
         animationType="slide"
         onRequestClose={() => setFilterModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.filterModalContent, { backgroundColor: colors.background }]}>
+        <SafeAreaView style={styles.modalOverlay}>
+          <View style={[styles.filterModalContent, { backgroundColor: colors.background, marginHorizontal: 8 }]}>
             <View style={styles.filterModalHeader}>
               <Text style={[styles.filterModalTitle, { color: colors.text }]}>Filter Orders</Text>
               <TouchableOpacity 
@@ -1518,10 +1604,13 @@ export default function OrdersTab({ orders: initialOrders, setSelectedOrder, ope
                 <Text style={[styles.filterInputLabel, { color: colors.text }]}>Date Range</Text>
                 <View style={styles.dateFilterRow}>
                   <TouchableOpacity
-                    style={[styles.dateButton, { backgroundColor: colors.card }]}
+                    style={[styles.dateButton, { backgroundColor: colors.card, borderColor: colors.border }]}
                     onPress={() => {
-                      setSelectingStartDate(true);
-                      setCalendarVisible(true);
+                      setFilterModalVisible(false);
+                      setTimeout(() => {
+                        setSelectingStartDate(true);
+                        setCalendarVisible(true);
+                      }, 50);
                     }}
                   >
                     <Ionicons name="calendar-outline" size={20} color={colors.primary} />
@@ -1532,14 +1621,17 @@ export default function OrdersTab({ orders: initialOrders, setSelectedOrder, ope
                   
                   {filters.startDate !== filters.endDate && (
                     <>
-                      <Text style={styles.dateRangeSeparator}>to</Text>
+                      <Text style={[styles.dateRangeSeparator, { color: colors.text }]}>to</Text>
                       
                       <TouchableOpacity
-                        style={[styles.dateButton, { backgroundColor: colors.card }]}
+                        style={[styles.dateButton, { backgroundColor: colors.card, borderColor: colors.border }]}
                         onPress={() => {
                           if (filters.startDate) {
-                            setSelectingStartDate(false);
-                            setCalendarVisible(true);
+                            setFilterModalVisible(false);
+                            setTimeout(() => {
+                              setSelectingStartDate(false);
+                              setCalendarVisible(true);
+                            }, 50);
                           } else {
                             Alert.alert('Error', 'Please select a start date first');
                           }
@@ -1573,7 +1665,7 @@ export default function OrdersTab({ orders: initialOrders, setSelectedOrder, ope
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </SafeAreaView>
       </Modal>
 
       {/* Add Export Type Modal */}
@@ -1583,40 +1675,94 @@ export default function OrdersTab({ orders: initialOrders, setSelectedOrder, ope
         animationType="slide"
         onRequestClose={() => setExportTypeModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
+        <SafeAreaView style={styles.modalOverlay}>
           <View style={[styles.exportTypeModal, { backgroundColor: colors.background }]}>
-            <Text style={[styles.exportTypeTitle, { color: colors.text }]}>
-              Select Export Type
-            </Text>
+            <View style={styles.exportModalHeader}>
+              <View style={[styles.exportModalIconContainer, { backgroundColor: colors.primary + '20' }]}>
+                <Ionicons name="download-outline" size={32} color={colors.primary} />
+              </View>
+              <Text style={[styles.exportTypeTitle, { color: colors.text }]}>
+                Choose Export Format
+              </Text>
+              <Text style={[styles.exportTypeSubtitle, { color: colors.lightText }]}>
+                Select the format that best suits your needs
+              </Text>
+            </View>
             
-            <TouchableOpacity
-              style={[styles.exportTypeButton, { backgroundColor: colors.card }]}
-              onPress={() => handleExportTypeSelection('store')}
-            >
-              <Ionicons name="document-outline" size={24} color={colors.primary} />
-              <Text style={[styles.exportTypeButtonText, { color: colors.text }]}>
-                Store Data
-              </Text>
-            </TouchableOpacity>
+            <View style={styles.exportOptionsContainer}>
+              <TouchableOpacity
+                style={[styles.exportTypeButton, { 
+                  backgroundColor: colors.card,
+                  borderColor: colors.border,
+                  ...Platform.select({
+                    ios: {
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.1,
+                      shadowRadius: 4,
+                    },
+                    android: {
+                      elevation: 3,
+                    },
+                  }),
+                }]}
+                onPress={() => handleExportTypeSelection('store')}
+              >
+                <View style={[styles.exportButtonIconContainer, { backgroundColor: '#4CAF50' + '20' }]}>
+                  <Ionicons name="document-text-outline" size={28} color="#4CAF50" />
+                </View>
+                <View style={styles.exportButtonContent}>
+                  <Text style={[styles.exportTypeButtonTitle, { color: colors.text }]}>
+                    Store Data Export
+                  </Text>
+                  <Text style={[styles.exportTypeButtonDescription, { color: colors.lightText }]}>
+                    Complete order details for store records and analysis
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.lightText} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.exportTypeButton, { 
+                  backgroundColor: colors.card,
+                  borderColor: colors.border,
+                  ...Platform.select({
+                    ios: {
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.1,
+                      shadowRadius: 4,
+                    },
+                    android: {
+                      elevation: 3,
+                    },
+                  }),
+                }]}
+                onPress={() => handleExportTypeSelection('roadwarrior')}
+              >
+                <View style={[styles.exportButtonIconContainer, { backgroundColor: '#2196F3' + '20' }]}>
+                  <Ionicons name="car-outline" size={28} color="#2196F3" />
+                </View>
+                <View style={styles.exportButtonContent}>
+                  <Text style={[styles.exportTypeButtonTitle, { color: colors.text }]}>
+                    RoadWarrior Format
+                  </Text>
+                  <Text style={[styles.exportTypeButtonDescription, { color: colors.lightText }]}>
+                    Optimized delivery routes for multiple drivers
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.lightText} />
+              </TouchableOpacity>
+            </View>
 
             <TouchableOpacity
-              style={[styles.exportTypeButton, { backgroundColor: colors.card }]}
-              onPress={() => handleExportTypeSelection('roadwarrior')}
-            >
-              <Ionicons name="car-outline" size={24} color={colors.primary} />
-              <Text style={[styles.exportTypeButtonText, { color: colors.text }]}>
-                RoadWarrior Format
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.cancelButton, { backgroundColor: colors.card }]}
+              style={[styles.exportCancelButton, { backgroundColor: colors.card, borderColor: colors.border }]}
               onPress={() => setExportTypeModalVisible(false)}
             >
-              <Text style={[styles.cancelButtonText, { color: colors.text }]}>Cancel</Text>
+              <Text style={[styles.exportCancelButtonText, { color: colors.text }]}>Cancel</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </SafeAreaView>
       </Modal>
 
       {/* Add Drivers Selection Modal */}
@@ -1626,17 +1772,34 @@ export default function OrdersTab({ orders: initialOrders, setSelectedOrder, ope
         animationType="slide"
         onRequestClose={() => setDriversModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
+        <SafeAreaView style={styles.modalOverlay}>
           <View style={[styles.driversModal, { backgroundColor: colors.background }]}>
-            <Text style={[styles.driversModalTitle, { color: colors.text }]}>
-              Select Number of Drivers
-            </Text>
+            <View style={styles.driversModalHeader}>
+              <View style={[styles.driversModalIconContainer, { backgroundColor: colors.primary + '20' }]}>
+                <Ionicons name="people-outline" size={32} color={colors.primary} />
+              </View>
+              <Text style={[styles.driversModalTitle, { color: colors.text }]}>
+                Select Number of Drivers
+              </Text>
+              <Text style={[styles.driversModalSubtitle, { color: colors.lightText }]}>
+                Orders will be distributed evenly among drivers
+              </Text>
+            </View>
 
-            <View style={styles.driversSliderContainer}>
+            <View style={[styles.driversSliderContainer, { backgroundColor: colors.card }]}>
+              <View style={styles.driversCountDisplay}>
+                <Text style={[styles.driversCountNumber, { color: colors.primary }]}>
+                  {numberOfDrivers}
+                </Text>
+                <Text style={[styles.driversCountLabel, { color: colors.text }]}>
+                  Driver{numberOfDrivers > 1 ? 's' : ''}
+                </Text>
+              </View>
+              
               <Slider
                 style={styles.driversSlider}
                 minimumValue={1}
-                maximumValue={5}
+                maximumValue={Math.min(5, filteredOrders.length)}
                 step={1}
                 value={numberOfDrivers}
                 onValueChange={setNumberOfDrivers}
@@ -1644,31 +1807,41 @@ export default function OrdersTab({ orders: initialOrders, setSelectedOrder, ope
                 maximumTrackTintColor={colors.border}
                 thumbTintColor={colors.primary}
               />
-              <Text style={[styles.driversCount, { color: colors.text }]}>
-                {numberOfDrivers} Driver{numberOfDrivers > 1 ? 's' : ''}
-              </Text>
+              
+              <View style={styles.driversSliderLabels}>
+                <Text style={[styles.driversSliderLabel, { color: colors.lightText }]}>1</Text>
+                <Text style={[styles.driversSliderLabel, { color: colors.lightText }]}>
+                  {Math.min(5, filteredOrders.length)}
+                </Text>
+              </View>
             </View>
 
-            <TouchableOpacity
-              style={[styles.exportButton, { backgroundColor: colors.primary }]}
-              onPress={handleRoadWarriorExport}
-              disabled={exportInProgress}
-            >
-              {exportInProgress ? (
-                <ActivityIndicator color="white" />
-              ) : (
-                <Text style={styles.exportButtonText}>Export</Text>
-              )}
-            </TouchableOpacity>
+            <View style={styles.driversModalActions}>
+              <TouchableOpacity
+                style={[styles.driversExportButton, { backgroundColor: colors.primary }]}
+                onPress={handleRoadWarriorExport}
+                disabled={exportInProgress}
+              >
+                {exportInProgress ? (
+                  <ActivityIndicator color="white" size="small" />
+                ) : (
+                  <>
+                    <Ionicons name="download-outline" size={20} color="white" />
+                    <Text style={styles.driversExportButtonText}>Export Routes</Text>
+                  </>
+                )}
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.cancelButton, { backgroundColor: colors.card }]}
-              onPress={() => setDriversModalVisible(false)}
-            >
-              <Text style={[styles.cancelButtonText, { color: colors.text }]}>Cancel</Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.driversCancelButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+                onPress={() => setDriversModalVisible(false)}
+                disabled={exportInProgress}
+              >
+                <Text style={[styles.driversCancelButtonText, { color: colors.text }]}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        </SafeAreaView>
       </Modal>
     </View>
   );
@@ -1722,21 +1895,39 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flexWrap: 'wrap',
   },
   dateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 12,
     borderRadius: 8,
     borderWidth: 1,
     flex: 1,
+    minHeight: 44,
+    gap: 8,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
   },
   dateButtonText: {
     fontSize: 14,
-    textAlign: 'center',
+    flex: 1,
+    textAlign: 'left',
   },
   dateRangeSeparator: {
-    marginHorizontal: 8,
+    marginHorizontal: 4,
     fontSize: 14,
+    color: '#666',
   },
   clearFilterButton: {
     marginLeft: 8,
@@ -1812,12 +2003,13 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     justifyContent: 'center',
-    alignItems: 'center',
+    alignItems: 'stretch',
     backgroundColor: 'rgba(0,0,0,0.5)',
-    padding: 20,
+    padding: 0,
   },
   calendarContainer: {
-    width: '90%',
+    width: '100%',
+    maxWidth: 450,
     borderRadius: 12,
     overflow: 'hidden',
   },
@@ -1828,10 +2020,13 @@ const styles = StyleSheet.create({
     padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0,0,0,0.1)',
+    position: 'relative',
   },
   calendarTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
+    flex: 1,
+    textAlign: 'left',
   },
   closeButton: {
     fontSize: 16,
@@ -2105,10 +2300,12 @@ const styles = StyleSheet.create({
   },
   filterModalContent: {
     flex: 1,
-    marginTop: 50,
+    marginTop: 40,
+    marginHorizontal: 0,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     backgroundColor: 'white',
+    maxHeight: '90%',
   },
   filterModalHeader: {
     flexDirection: 'row',
@@ -2200,10 +2397,12 @@ const styles = StyleSheet.create({
   },
   filterModalFooter: {
     flexDirection: 'row',
-    padding: 20,
+    padding: 16,
+    paddingBottom: Platform.OS === 'ios' ? 30 : 16,
     gap: 12,
     borderTopWidth: 1,
     borderTopColor: '#EEEEEE',
+    backgroundColor: 'white',
   },
   filterModalButton: {
     flex: 1,
@@ -2211,8 +2410,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 12,
+    paddingHorizontal: 12,
     borderRadius: 8,
-    gap: 8,
+    gap: 6,
+    minHeight: 44,
   },
   filterModalClearButton: {
     backgroundColor: '#F5F5F5',
@@ -2221,8 +2422,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#D50000',
   },
   filterModalButtonText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '500',
+    textAlign: 'center',
   },
   filterBadgesContainer: {
     flexDirection: 'row',
@@ -2249,7 +2451,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   exportTypeModal: {
-    width: '80%',
+    width: '90%',
+    maxWidth: 400,
     padding: 20,
     borderRadius: 12,
   },
@@ -2258,56 +2461,155 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 20,
   },
+  exportTypeSubtitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  exportModalHeader: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  exportModalIconContainer: {
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  exportOptionsContainer: {
+    marginBottom: 20,
+  },
   exportTypeButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     padding: 16,
-    borderRadius: 8,
+    borderRadius: 12,
     marginBottom: 12,
+    borderWidth: 1,
   },
-  exportTypeButtonText: {
+  exportButtonIconContainer: {
+    padding: 12,
+    borderRadius: 12,
+  },
+  exportButtonContent: {
+    flex: 1,
+    marginLeft: 4,
+  },
+  exportTypeButtonTitle: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
+    marginBottom: 4,
   },
-  cancelButton: {
+  exportTypeButtonDescription: {
+    fontSize: 14,
+    fontWeight: '400',
+    lineHeight: 20,
+  },
+  exportCancelButton: {
     padding: 12,
     borderRadius: 8,
     alignItems: 'center',
+    borderWidth: 1,
   },
-  cancelButtonText: {
+  exportCancelButtonText: {
     fontSize: 16,
     fontWeight: '500',
     textAlign: 'center',
   },
   driversModal: {
-    width: '80%',
+    width: '90%',
+    maxWidth: 400,
     padding: 20,
     borderRadius: 12,
   },
   driversModalTitle: {
     fontSize: 20,
     fontWeight: '600',
-    marginBottom: 20,
+    marginBottom: 8,
     textAlign: 'center',
+  },
+  driversModalSubtitle: {
+    fontSize: 14,
+    fontWeight: '400',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  driversModalHeader: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  driversModalIconContainer: {
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 8,
   },
   driversSliderContainer: {
     marginBottom: 20,
+    padding: 16,
+    borderRadius: 12,
   },
   driversSlider: {
     width: '100%',
     height: 40,
   },
-  driversCount: {
+  driversCountDisplay: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  driversCountNumber: {
+    fontSize: 32,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  driversCountLabel: {
     fontSize: 16,
     fontWeight: '500',
-    textAlign: 'center',
+    marginTop: 4,
+  },
+  driversSliderLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginTop: 8,
   },
-  exportButtonText: {
+  driversSliderLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  driversModalActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  driversExportButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    gap: 8,
+    minHeight: 48,
+  },
+  driversExportButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: 'white',
+  },
+  driversCancelButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    minHeight: 48,
+    borderWidth: 1,
+  },
+  driversCancelButtonText: {
     fontSize: 16,
     fontWeight: '500',
-    color: 'white',
   },
   loadingFooter: {
     flexDirection: 'row' as const,
@@ -2319,4 +2621,15 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 14,
   } as TextStyle,
+  calendarModalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    padding: 16,
+  },
+  calendarCloseButton: {
+    padding: 8,
+    borderRadius: 8,
+  },
 }); 

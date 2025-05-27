@@ -321,11 +321,6 @@ export default function OrderDetailsScreen() {
       return;
     }
 
-    if (!orderDetails.buildingNumber.trim()) {
-      Alert.alert('Error', 'Please enter your building number');
-      return;
-    }
-
     if (!orderDetails.address.trim()) {
       Alert.alert('Error', 'Please enter your street address');
       return;
@@ -351,6 +346,9 @@ export default function OrderDetailsScreen() {
       
       const defaultGuestEmail = 'guest@mimisdelivery.aradatech.com';
       
+      // Use "0000" as default building number if not provided
+      const buildingNumber = orderDetails.buildingNumber.trim() || '0000';
+      
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
         .insert({
@@ -359,7 +357,7 @@ export default function OrderDetailsScreen() {
           guest_phone: !user ? orderDetails.phoneNumber : null,
           customer_name: orderDetails.customerName,
           phone_number: orderDetails.phoneNumber,
-          address: `${orderDetails.buildingNumber} ${orderDetails.address}, ${orderDetails.zipCode}`,
+          address: `${buildingNumber} ${orderDetails.address}, ${orderDetails.zipCode}`,
           animal_size_id: params.sizeOptionId,
           price_option_id: params.priceOptionId,
           cutting_style_id: params.cuttingStyleId,
@@ -373,7 +371,7 @@ export default function OrderDetailsScreen() {
           extras: selectedExtras ? selectedExtras.map(extra => extra.id) : null,
           divided: orderDetails.divided,
           delivery_fee: deliveryFee,
-          building_number: orderDetails.buildingNumber
+          building_number: buildingNumber
         })
         .select()
         .single();
@@ -394,7 +392,7 @@ export default function OrderDetailsScreen() {
           deliveryDate: deliveryDates.find(date => date.id === selectedDate)?.date,
           customerName: orderDetails.customerName,
           phoneNumber: orderDetails.phoneNumber,
-          address: `${orderDetails.buildingNumber} ${orderDetails.address}, ${orderDetails.zipCode}`,
+          address: `${buildingNumber} ${orderDetails.address}, ${orderDetails.zipCode}`,
           email: orderDetails.email,
           deliveryFee: deliveryFee.toString(),
         }
@@ -667,9 +665,9 @@ export default function OrderDetailsScreen() {
               multiline
               numberOfLines={3}
             />
-<TextInput
+            <TextInput
               style={[styles.input, { backgroundColor: colors.card, color: colors.text }]}
-              placeholder="Building Number"
+              placeholder="Building Number (Optional)"
               placeholderTextColor={colors.lightText}
               value={orderDetails.buildingNumber}
               onChangeText={(text) => setOrderDetails(prev => ({ ...prev, buildingNumber: text }))}

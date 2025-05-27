@@ -2,6 +2,7 @@ import { Tabs, useRouter } from 'expo-router';
 import React from 'react';
 import { Platform, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors } from '../../constants/Colors';
 import { useColorScheme } from '../../hooks/useColorScheme';
@@ -10,6 +11,7 @@ export default function TabLayout() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   return (
     <Tabs
@@ -42,8 +44,8 @@ export default function TabLayout() {
         tabBarStyle: {
           backgroundColor: '#FFFFFF',
           borderTopColor: 'rgba(0, 0, 0, 0.1)',
-          height: Platform.OS === 'ios' ? 90 : 60,
-          paddingBottom: Platform.OS === 'ios' ? 30 : 5,
+          height: Platform.OS === 'ios' ? 90 : 60 + insets.bottom,
+          paddingBottom: Platform.OS === 'ios' ? 30 : Math.max(insets.bottom, 5),
           paddingTop: 5,
           elevation: 8,
           shadowColor: '#000',

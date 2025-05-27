@@ -80,6 +80,9 @@ export default function HomeScreen() {
               <Text style={[styles.heroTitle, createTextShadow('rgba(0, 0, 0, 0.5)', { width: 0, height: 2 }, 3)]}>
                 Mimi's Delivery
               </Text>
+              <Text style={[styles.heroAmharicTitle, createTextShadow('rgba(0, 0, 0, 0.5)', { width: 0, height: 2 }, 3)]}>
+                ሚሚስ ዲሊቨሪ
+              </Text>
               <Text style={[styles.heroSubtitle, createTextShadow('rgba(0, 0, 0, 0.5)', { width: 0, height: 1 }, 2)]}>
                 Premium Lamb, Goat & Sheep Delivery
               </Text>
@@ -189,6 +192,12 @@ const styles = StyleSheet.create({
     right: 0,
   },
   heroTitle: {
+    fontSize: 36,
+    fontWeight: 'bold',
+    color: 'white',
+    marginBottom: 10,
+  },
+  heroAmharicTitle: {
     fontSize: 36,
     fontWeight: 'bold',
     color: 'white',

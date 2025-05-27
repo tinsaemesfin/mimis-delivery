@@ -11,6 +11,7 @@ interface CardProps {
   onPress: () => void;
   selected?: boolean;
   style?: ViewStyle;
+  showDescription?: boolean;
 }
 
 const { width } = Dimensions.get('window');
@@ -22,6 +23,7 @@ const Card: React.FC<CardProps> = ({
   onPress,
   selected = false,
   style,
+  showDescription = true,
 }) => {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme || 'light'];
@@ -65,7 +67,7 @@ const Card: React.FC<CardProps> = ({
         >
           {title}
         </Text>
-        {description && (
+        {description && showDescription && (
           <Text 
             style={[
               styles.description, 
@@ -87,6 +89,8 @@ const styles = StyleSheet.create({
     marginHorizontal: 2,
     overflow: 'hidden',
     borderWidth: 2,
+    width: 200,
+    height: 260,
   },
   selectedCard: {
     transform: [{ scale: 1.02 }],
@@ -94,24 +98,29 @@ const styles = StyleSheet.create({
   imageContainer: {
     position: 'relative',
     width: '100%',
+    height: 180,
   },
   image: {
     width: '100%',
-    height: 180,
+    height: '100%',
     borderTopLeftRadius: 14,
     borderTopRightRadius: 14,
   },
   content: {
     padding: 16,
+    flex: 1,
+    justifyContent: 'center',
   },
   title: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
+    textAlign: 'center',
     marginBottom: 6,
   },
   description: {
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
   },
   selectedBadge: {
     position: 'absolute',

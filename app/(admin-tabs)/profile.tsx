@@ -297,23 +297,70 @@ export default function ProfileScreen() {
 
             <View style={styles.modalBody}>
               <View style={styles.contactSection}>
-                <Text style={[styles.contactTitle, { color: colors.text }]}>Contact Us</Text>
-                <View style={styles.contactItem}>
-                  <Ionicons name="call-outline" size={20} color={colors.primary} />
-                  <Text style={[styles.contactText, { color: colors.text }]}>
-                    +1 (555) 123-4567
+                <View style={styles.contactHeader}>
+                  <View style={[styles.contactIconContainer, { backgroundColor: colors.primary + '15' }]}>
+                    <Ionicons name="headset-outline" size={32} color={colors.primary} />
+                  </View>
+                  <Text style={[styles.contactTitle, { color: colors.text }]}>We're Here to Help</Text>
+                  <Text style={[styles.contactSubtitle, { color: colors.lightText }]}>
+                    Get in touch with our support team
                   </Text>
                 </View>
-                <View style={styles.contactItem}>
-                  <Ionicons name="call-outline" size={20} color={colors.primary} />
-                  <Text style={[styles.contactText, { color: colors.text }]}>
-                    +1 (555) 987-6543
-                  </Text>
+
+                <View style={styles.contactMethods}>
+                  <TouchableOpacity 
+                    style={[styles.contactCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                    onPress={() => Linking.openURL('tel:+12063539750')}
+                  >
+                    <View style={[styles.contactCardIcon, { backgroundColor: colors.primary + '15' }]}>
+                      <Ionicons name="call" size={24} color={colors.primary} />
+                    </View>
+                    <View style={styles.contactCardContent}>
+                      <Text style={[styles.contactCardTitle, { color: colors.text }]}>Primary Phone</Text>
+                      <Text style={[styles.contactCardText, { color: colors.primary }]}>
+                        +1 (206) 353-9750
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color={colors.lightText} />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity 
+                    style={[styles.contactCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                    onPress={() => Linking.openURL('tel:+12063872686')}
+                  >
+                    <View style={[styles.contactCardIcon, { backgroundColor: colors.primary + '15' }]}>
+                      <Ionicons name="call" size={24} color={colors.primary} />
+                    </View>
+                    <View style={styles.contactCardContent}>
+                      <Text style={[styles.contactCardTitle, { color: colors.text }]}>Secondary Phone</Text>
+                      <Text style={[styles.contactCardText, { color: colors.primary }]}>
+                        +1 (206) 387-2686
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color={colors.lightText} />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity 
+                    style={[styles.contactCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                    onPress={() => Linking.openURL('mailto:Wondradnegash9@gmail.com')}
+                  >
+                    <View style={[styles.contactCardIcon, { backgroundColor: colors.primary + '15' }]}>
+                      <Ionicons name="mail" size={24} color={colors.primary} />
+                    </View>
+                    <View style={styles.contactCardContent}>
+                      <Text style={[styles.contactCardTitle, { color: colors.text }]}>Email Support</Text>
+                      <Text style={[styles.contactCardText, { color: colors.primary }]}>
+                        Wondradnegash9@gmail.com
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color={colors.lightText} />
+                  </TouchableOpacity>
                 </View>
-                <View style={styles.contactItem}>
-                  <Ionicons name="location-outline" size={20} color={colors.primary} />
-                  <Text style={[styles.contactText, { color: colors.text }]}>
-                    123 Delivery Street{'\n'}New York, NY 10001
+
+                <View style={[styles.helpNote, { backgroundColor: colors.primary + '10', borderColor: colors.primary + '30' }]}>
+                  <Ionicons name="information-circle" size={20} color={colors.primary} />
+                  <Text style={[styles.helpNoteText, { color: colors.text }]}>
+                    Our support team is available to help with orders, delivery questions, and any other assistance you need.
                   </Text>
                 </View>
               </View>
@@ -690,18 +737,74 @@ const styles = StyleSheet.create({
   contactSection: {
     marginTop: 16,
   },
+  contactHeader: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  contactIconContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
   contactTitle: {
     fontSize: 18,
     fontWeight: '600',
+    marginBottom: 8,
+  },
+  contactSubtitle: {
+    fontSize: 14,
+  },
+  contactMethods: {
     marginBottom: 16,
   },
-  contactItem: {
+  contactCard: {
     flexDirection: 'row',
     alignItems: 'center',
+    padding: 16,
+    borderWidth: 1,
+    borderRadius: 12,
     marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 2,
   },
-  contactText: {
+  contactCardIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  contactCardContent: {
+    flex: 1,
+  },
+  contactCardTitle: {
     fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  contactCardText: {
+    fontSize: 14,
+  },
+  helpNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderWidth: 1,
+    borderRadius: 8,
+    marginTop: 16,
+  },
+  helpNoteText: {
+    fontSize: 14,
     marginLeft: 12,
   },
   dialogOverlay: {

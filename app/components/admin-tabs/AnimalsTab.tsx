@@ -18,7 +18,7 @@ import { useColorScheme } from '../../../hooks/useColorScheme';
 import Button from '../../../components/Button';
 import { supabase } from '../../../utils/supabase';
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import { decode } from 'base64-arraybuffer';
 
 interface AnimalItem {
@@ -156,26 +156,30 @@ export default function AnimalsTab({ animals: initialAnimals, setAnimals: setPar
     setFilteredAnimals(filtered);
   };
   
-  // Add image picker function
+  // Replace image picker function with document picker
   const pickImage = async () => {
     try {
-      // Request permissions
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission needed', 'Please grant permission to access your photos');
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.7,
-        base64: true,
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['image/*'],
+        copyToCacheDirectory: true,
       });
 
-      if (!result.canceled && result.assets[0].base64) {
-        setSelectedImage(result.assets[0].base64);
+      if (!result.canceled && result.assets && result.assets[0]) {
+        const asset = result.assets[0];
+        
+        // Convert file to base64
+        const response = await fetch(asset.uri);
+        const blob = await response.blob();
+        const reader = new FileReader();
+        
+        reader.onload = () => {
+          const base64 = reader.result as string;
+          // Remove the data:image/...;base64, prefix
+          const base64Data = base64.split(',')[1];
+          setSelectedImage(base64Data);
+        };
+        
+        reader.readAsDataURL(blob);
       }
     } catch (error) {
       console.error('Error picking image:', error);
@@ -536,37 +540,43 @@ export default function AnimalsTab({ animals: initialAnimals, setAnimals: setPar
             </Text>
             
             {/* Image Selection */}
-            <TouchableOpacity 
-              style={[styles.imageContainer, { borderColor: colors.border }]} 
-              onPress={pickImage}
-              activeOpacity={0.8}
-            >
-              {selectedImage ? (
-                <Image 
-                  source={{ uri: `data:image/jpeg;base64,${selectedImage}` }}
-                  style={styles.selectedImage}
-                />
-              ) : currentAnimal?.image_url ? (
-                <Image 
-                  source={{ uri: getImageUrl(currentAnimal.image_url) }}
-                  style={styles.selectedImage}
-                  resizeMode="cover"
-                />
-              ) : (
-                <View style={styles.imagePlaceholder}>
-                  <Ionicons name="camera" size={40} color="#666" />
-                  <Text style={styles.imagePlaceholderText}>Tap to add image</Text>
+            <View style={styles.imageSelectionContainer}>
+              {(selectedImage || currentAnimal?.image_url) && (
+                <View style={[styles.imageContainer, { borderColor: colors.border }]}>
+                  {selectedImage ? (
+                    <Image 
+                      source={{ uri: `data:image/jpeg;base64,${selectedImage}` }}
+                      style={styles.selectedImage}
+                    />
+                  ) : currentAnimal?.image_url ? (
+                    <Image 
+                      source={{ uri: getImageUrl(currentAnimal.image_url) }}
+                      style={styles.selectedImage}
+                      resizeMode="cover"
+                    />
+                  ) : null}
                 </View>
               )}
-              <View style={[
-                styles.imageOverlay,
-                (selectedImage || currentAnimal?.image_url) && styles.imageOverlayVisible
-              ]}>
-                <Text style={styles.imageOverlayText}>
-                  {selectedImage || currentAnimal?.image_url ? 'Tap to change' : 'Tap to select'}
-                </Text>
+              
+              <View style={styles.imageButtonsContainer}>
+                <TouchableOpacity 
+                  style={[styles.imageButton, { borderColor: colors.border }]} 
+                  onPress={pickImage}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="document" size={24} color={colors.primary} />
+                  <Text style={[styles.imageButtonText, { color: colors.text }]}>
+                    Choose Image
+                  </Text>
+                </TouchableOpacity>
               </View>
-            </TouchableOpacity>
+              
+              {!selectedImage && !currentAnimal?.image_url && (
+                <Text style={[styles.imageHelpText, { color: colors.lightText }]}>
+                  Choose an image file for the animal
+                </Text>
+              )}
+            </View>
             
             <TextInput
               style={[styles.input, { borderColor: colors.border, color: colors.text }]}
@@ -798,7 +808,7 @@ const styles = StyleSheet.create({
     flex: 1,
     marginHorizontal: 5,
   },
-  imageContainer: {
+  imageSelectionContainer: {
     width: '100%',
     height: 200,
     borderRadius: 12,
@@ -809,37 +819,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#f5f5f5',
   },
+  imageContainer: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 12,
+    borderWidth: 1,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   selectedImage: {
     width: '100%',
     height: '100%',
     resizeMode: 'cover',
   },
-  imagePlaceholder: {
+  imageButtonsContainer: {
+    flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  imagePlaceholderText: {
+  imageButton: {
+    width: '60%',
+    height: '100%',
+    borderWidth: 1,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  imageHelpText: {
     marginTop: 8,
     fontSize: 14,
-  },
-  imageOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    opacity: 0,
-  },
-  imageOverlayVisible: {
-    opacity: 1,
-  },
-  imageOverlayText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
   },
   loadingOverlay: {
     position: 'absolute',

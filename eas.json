@@ -35,7 +35,7 @@
         "SITE_URL": "https://mimisdelivery.aradatech.com"
       },
       "android": {
-        "buildType": "apk"
+        "buildType": "aab"
       },
       "ios": {
         "simulator": false

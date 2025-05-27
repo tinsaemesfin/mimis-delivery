@@ -23,6 +23,7 @@ import { createShadow } from '@/utils/styling';
 import OrdersTab from '../components/admin-tabs/OrdersTab';
 import { supabase } from '../../utils/supabase';
 import { useAuth } from '../../lib/auth/AuthContext';
+import { useIsAdmin } from '../../lib/auth/useIsAdmin';
 import { Picker } from '@react-native-picker/picker';
 
 // Define Order type to match the one expected by OrdersTab
@@ -60,6 +61,7 @@ export default function AdminOrdersScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme || 'light'];
   const { user } = useAuth();
+  const { isAdmin, isSuperAdmin } = useIsAdmin(user?.id);
   
   const [orders, setOrders] = useState<Order[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -794,6 +796,7 @@ export default function AdminOrdersScreen() {
           openStatusModal={openStatusModal}
           onExport={handleExportOrders}
           onEditOrder={handleEditOrder}
+          isSuperAdmin={isSuperAdmin}
         />
       </View>
 

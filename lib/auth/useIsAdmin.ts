@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../utils/supabase';
 
 /**
- * Hook to check if a user is an admin by looking up their user_id in the admins table
+ * Hook to check if a user is an admin and super admin by looking up their user_id in the admins table
  * @param userId The user ID to check
- * @returns An object containing isAdmin status and loading state
+ * @returns An object containing isAdmin, isSuperAdmin status and loading state
  */
 export function useIsAdmin(userId: string | undefined) {
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<Error | null>(null);
 
@@ -15,6 +16,7 @@ export function useIsAdmin(userId: string | undefined) {
     async function checkAdminStatus() {
       if (!userId) {
         setIsAdmin(false);
+        setIsSuperAdmin(false);
         setLoading(false);
         return;
       }
@@ -22,10 +24,10 @@ export function useIsAdmin(userId: string | undefined) {
       try {
         setLoading(true);
         
-        // Query the admins table to check if the user_id exists
+        // Query the admins table to check if the user_id exists and get super admin status
         const { data, error } = await supabase
           .from('admins')
-          .select('*')
+          .select('*, is_super_admin')
           .eq('user_id', userId)
           .single();
         
@@ -34,11 +36,16 @@ export function useIsAdmin(userId: string | undefined) {
         }
         
         // If data exists, the user is an admin
-        setIsAdmin(!!data);
+        const adminStatus = !!data;
+        const superAdminStatus = !!data?.is_super_admin;
+        
+        setIsAdmin(adminStatus);
+        setIsSuperAdmin(superAdminStatus);
       } catch (err) {
         console.error('Error checking admin status:', err);
         setError(err instanceof Error ? err : new Error(String(err)));
         setIsAdmin(false);
+        setIsSuperAdmin(false);
       } finally {
         setLoading(false);
       }
@@ -47,5 +54,5 @@ export function useIsAdmin(userId: string | undefined) {
     checkAdminStatus();
   }, [userId]);
 
-  return { isAdmin, loading, error };
+  return { isAdmin, isSuperAdmin, loading, error };
 } 

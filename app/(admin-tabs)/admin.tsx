@@ -20,6 +20,8 @@ import { Ionicons } from '@expo/vector-icons';
 import Button from '../../components/Button';
 import { createShadow } from '@/utils/styling';
 import { supabase } from '@/utils/supabase';
+import { useAuth } from '../../lib/auth/AuthContext';
+import { useIsAdmin } from '../../lib/auth/useIsAdmin';
 
 // Import tab components
 import AnimalsTab from '../components/admin-tabs/AnimalsTab';
@@ -31,6 +33,8 @@ import OrgansTab from '../components/admin-tabs/OrgansTab';
 import ExtrasTab from '../components/admin-tabs/ExtrasTab';
 import DeliveryFeeTab from '../components/admin-tabs/DeliveryFeeTab';
 import AnimalSizesTab from '../components/admin-tabs/AnimalSizesTab';
+import SuperAdminTab from '../components/admin-tabs/SuperAdminTab';
+import LogsTab from '../components/admin-tabs/LogsTab';
 
 // Define types for our data - These need to match the component expectations
 type Animal = {
@@ -259,7 +263,7 @@ const initialAnimalSizeOptions = [
   }
 ];
 
-type AdminTab = 'animals' | 'cuttingStyles' | 'orders' | 'dates' | 'priceOptions' | 'organs' | 'extras' | 'deliveryFee' | 'animalSizes';
+type AdminTab = 'animals' | 'cuttingStyles' | 'orders' | 'dates' | 'priceOptions' | 'organs' | 'extras' | 'deliveryFee' | 'animalSizes' | 'superAdmin' | 'logs';
 
 // This comment is a temporary fix for type compatibility issues.
 // There are conflicting type definitions between component files and this admin.tsx file.
@@ -274,6 +278,8 @@ type AdminTab = 'animals' | 'cuttingStyles' | 'orders' | 'dates' | 'priceOptions
 export default function AdminScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme || 'light'];
+  const { user } = useAuth();
+  const { isAdmin, isSuperAdmin, loading } = useIsAdmin(user?.id);
   
   const [activeTab, setActiveTab] = useState<AdminTab>('animals');
   const [animals, setAnimals] = useState<Animal[]>(initialAnimals);
@@ -696,6 +702,48 @@ export default function AdminScreen() {
             </Text>
           </TouchableOpacity>
           
+          {isSuperAdmin && (
+            <TouchableOpacity
+              style={[
+                styles.tab,
+                activeTab === 'superAdmin' && { ...styles.activeTab, borderBottomColor: colors.primary }
+              ]}
+              onPress={() => {
+                setTimeout(() => setActiveTab('superAdmin'), 0);
+              }}
+            >
+              <Text
+                style={[
+                  styles.tabText,
+                  activeTab === 'superAdmin' && { ...styles.activeTabText, color: colors.primary }
+                ]}
+              >
+                Super Admin
+              </Text>
+            </TouchableOpacity>
+          )}
+          
+          {isSuperAdmin && (
+            <TouchableOpacity
+              style={[
+                styles.tab,
+                activeTab === 'logs' && { ...styles.activeTab, borderBottomColor: colors.primary }
+              ]}
+              onPress={() => {
+                setTimeout(() => setActiveTab('logs'), 0);
+              }}
+            >
+              <Text
+                style={[
+                  styles.tabText,
+                  activeTab === 'logs' && { ...styles.activeTabText, color: colors.primary }
+                ]}
+              >
+                Logs
+              </Text>
+            </TouchableOpacity>
+          )}
+          
         </ScrollView>
       </View>
     );
@@ -732,6 +780,7 @@ export default function AdminScreen() {
             setSelectedOrder={setSelectedOrder as any}
             openStatusModal={openStatusModal as any}
             onExport={handleExportOrders}
+            isSuperAdmin={isSuperAdmin}
           />
         )}
         {activeTab === 'priceOptions' && (
@@ -760,6 +809,8 @@ export default function AdminScreen() {
           />
         )}
         {activeTab === 'animalSizes' && <AnimalSizesTab />}
+        {activeTab === 'superAdmin' && <SuperAdminTab currentUserId={user?.id || ''} />}
+        {activeTab === 'logs' && <LogsTab currentUserId={user?.id || ''} />}
       </View>
       
       {/* Status update modal */}

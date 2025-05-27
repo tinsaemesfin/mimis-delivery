@@ -217,6 +217,7 @@ export default function AnimalSelectionScreen() {
       image={item.image_url ? { uri: item.image_url } : require('../assets/images/meat-banner.png')}
       selected={selectedAnimal === item.id}
       onPress={() => handleAnimalSelect(item.id)}
+      showDescription={false}
     />
   );
 

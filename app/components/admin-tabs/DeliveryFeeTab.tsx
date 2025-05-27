@@ -17,10 +17,27 @@ interface DeliveryFeeTabProps {
   setDeliveryFee: (fee: number) => void;
 }
 
+// Skeleton loading component
+const SkeletonLoader = ({ colors }: { colors: any }) => (
+  <View style={[styles.card, { backgroundColor: colors.card }]}>
+    <View style={[styles.skeletonTitle, { backgroundColor: colors.border }]} />
+    <View style={[styles.skeletonDescription, { backgroundColor: colors.border }]} />
+    <View style={[styles.skeletonDescription2, { backgroundColor: colors.border }]} />
+    
+    <View style={styles.inputContainer}>
+      <View style={[styles.skeletonLabel, { backgroundColor: colors.border }]} />
+      <View style={[styles.skeletonInput, { backgroundColor: colors.border }]} />
+    </View>
+    
+    <View style={[styles.skeletonButton, { backgroundColor: colors.border }]} />
+  </View>
+);
+
 export default function DeliveryFeeTab({ deliveryFee, setDeliveryFee }: DeliveryFeeTabProps) {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme || 'light'];
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [tempFee, setTempFee] = useState(deliveryFee.toString());
 
   useEffect(() => {
@@ -44,6 +61,8 @@ export default function DeliveryFeeTab({ deliveryFee, setDeliveryFee }: Delivery
     } catch (error) {
       console.error('Error fetching delivery fee:', error);
       Alert.alert('Error', 'Failed to fetch delivery fee');
+    } finally {
+      setIsInitialLoading(false);
     }
   };
 
@@ -73,6 +92,15 @@ export default function DeliveryFeeTab({ deliveryFee, setDeliveryFee }: Delivery
       setIsLoading(false);
     }
   };
+
+  // Show skeleton loading while fetching initial data
+  if (isInitialLoading) {
+    return (
+      <View style={styles.container}>
+        <SkeletonLoader colors={colors} />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -153,5 +181,45 @@ const styles = StyleSheet.create({
   },
   button: {
     marginTop: 8,
+  },
+  // Skeleton styles
+  skeletonTitle: {
+    height: 28,
+    width: '60%',
+    borderRadius: 4,
+    marginBottom: 8,
+    opacity: 0.3,
+  },
+  skeletonDescription: {
+    height: 16,
+    width: '90%',
+    borderRadius: 4,
+    marginBottom: 8,
+    opacity: 0.3,
+  },
+  skeletonDescription2: {
+    height: 16,
+    width: '70%',
+    borderRadius: 4,
+    marginBottom: 24,
+    opacity: 0.3,
+  },
+  skeletonLabel: {
+    height: 16,
+    width: '40%',
+    borderRadius: 4,
+    marginBottom: 8,
+    opacity: 0.3,
+  },
+  skeletonInput: {
+    height: 50,
+    borderRadius: 8,
+    opacity: 0.3,
+  },
+  skeletonButton: {
+    height: 50,
+    borderRadius: 8,
+    marginTop: 8,
+    opacity: 0.3,
   },
 }); 

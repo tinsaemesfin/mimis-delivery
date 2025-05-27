@@ -5,6 +5,8 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useState } from 'react';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { AuthProvider } from '../lib/auth/AuthContext';
 import { useColorScheme } from '../hooks/useColorScheme';
 import Auth from './components/auth/Auth';
@@ -60,6 +62,8 @@ export default function RootLayout() {
     async function initializeApp() {
       try {
         if (loaded) {
+          // Add a small delay to ensure smooth transition
+          await new Promise(resolve => setTimeout(resolve, 100));
           await SplashScreen.hideAsync();
         }
       } catch (err) {
@@ -108,7 +112,8 @@ export default function RootLayout() {
   }
 
   return (
-    <>
+    <SafeAreaProvider>
+      <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} translucent={true} backgroundColor="transparent" />
       <AuthProvider>
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
           <Stack>
@@ -159,6 +164,6 @@ export default function RootLayout() {
         visible={showAgreement}
         onAccept={handleAcceptAgreement}
       />
-    </>
+    </SafeAreaProvider>
   );
 }

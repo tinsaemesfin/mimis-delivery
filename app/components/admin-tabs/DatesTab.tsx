@@ -275,6 +275,10 @@ export default function DatesTab({ deliveryDates: initialDates, setDeliveryDates
   const handleDateSelect = (day: DateData) => {
     setNewDate(day.dateString);
     setCalendarVisible(false);
+    // Reopen the date modal after a short delay
+    setTimeout(() => {
+      setDateModal(true);
+    }, 100);
   };
   
   // Get available slots (subtracting booked orders)
@@ -489,7 +493,12 @@ export default function DatesTab({ deliveryDates: initialDates, setDeliveryDates
             
             <TouchableOpacity
               style={[styles.dateSelector, { borderColor: colors.border }]}
-              onPress={() => setCalendarVisible(true)}
+              onPress={() => {
+                setDateModal(false);
+                setTimeout(() => {
+                  setCalendarVisible(true);
+                }, 100);
+              }}
             >
               <Text style={[styles.dateSelectorText, { color: newDate ? colors.text : colors.lightText }]}>
                 {newDate ? formatDate(newDate) : 'Select a date'}
@@ -534,13 +543,26 @@ export default function DatesTab({ deliveryDates: initialDates, setDeliveryDates
         animationType="slide"
         transparent={true}
         visible={calendarVisible}
-        onRequestClose={() => setCalendarVisible(false)}
+        onRequestClose={() => {
+          setCalendarVisible(false);
+          // Reopen the date modal
+          setTimeout(() => {
+            setDateModal(true);
+          }, 100);
+        }}
+        presentationStyle="overFullScreen"
       >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.calendarModal, { backgroundColor: colors.card }]}>
+        <View style={styles.calendarModalOverlay}>
+          <View style={[styles.calendarContainer, { backgroundColor: colors.card }]}>
             <View style={styles.calendarHeader}>
               <Text style={[styles.calendarTitle, { color: colors.text }]}>Select Delivery Date</Text>
-              <TouchableOpacity onPress={() => setCalendarVisible(false)}>
+              <TouchableOpacity onPress={() => {
+                setCalendarVisible(false);
+                // Reopen the date modal
+                setTimeout(() => {
+                  setDateModal(true);
+                }, 100);
+              }}>
                 <Text style={[styles.closeButton, { color: colors.primary }]}>Close</Text>
               </TouchableOpacity>
             </View>
@@ -549,6 +571,10 @@ export default function DatesTab({ deliveryDates: initialDates, setDeliveryDates
               onDayPress={handleDateSelect}
               markedDates={getMarkedDates()}
               minDate={!editMode ? new Date().toISOString().split('T')[0] : undefined}
+              enableSwipeMonths={true}
+              hideArrows={false}
+              disableMonthChange={false}
+              monthFormat={'MMMM yyyy'}
               theme={{
                 calendarBackground: colors.card,
                 textSectionTitleColor: colors.text,
@@ -560,6 +586,14 @@ export default function DatesTab({ deliveryDates: initialDates, setDeliveryDates
                 dotColor: colors.primary,
                 arrowColor: colors.primary,
                 monthTextColor: colors.text,
+                disabledArrowColor: colors.lightText,
+                indicatorColor: colors.primary,
+                textDayFontWeight: '300',
+                textMonthFontWeight: 'bold',
+                textDayHeaderFontWeight: '300',
+                textDayFontSize: 16,
+                textMonthFontSize: 16,
+                textDayHeaderFontSize: 14
               }}
             />
           </View>
@@ -693,7 +727,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.5)',
-    padding: 20,
+    padding: 16,
   },
   modalContent: {
     width: '90%',
@@ -743,8 +777,16 @@ const styles = StyleSheet.create({
     flex: 1,
     marginHorizontal: 5,
   },
-  calendarModal: {
-    width: '90%',
+  calendarModalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    padding: 16,
+  },
+  calendarContainer: {
+    width: '100%',
+    maxWidth: 450,
     borderRadius: 12,
     padding: 10,
     backgroundColor: 'white',
@@ -753,12 +795,15 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
+    overflow: 'hidden',
   },
   calendarHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 10,
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.1)',
   },
   calendarTitle: {
     fontSize: 16,
