@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -40,7 +40,7 @@ export default function ExtrasTab({ extras, setExtras }: ExtrasTabProps) {
     description: '',
     price: ''
   });
-  const [loading, setLoading] = useState(false);
+  const [loadingItems, setLoadingItems] = useState<Record<string, boolean>>({});
   const [filter, setFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
   const handleAddExtra = async () => {
@@ -54,7 +54,6 @@ export default function ExtrasTab({ extras, setExtras }: ExtrasTabProps) {
       return;
     }
 
-    setLoading(true);
     try {
       const { data, error } = await supabase
         .from('extras')
@@ -68,39 +67,59 @@ export default function ExtrasTab({ extras, setExtras }: ExtrasTabProps) {
 
       if (error) throw error;
 
-      setExtras([...extras, data]);
-      setNewExtra({ title: '', description: '', price: '' });
-      setModalVisible(false);
-      Alert.alert('Success', 'Extra added successfully');
+      if (data) {
+        setLoadingItems(prev => ({ ...prev, [data.id]: true }));
+        setExtras([...extras, data]);
+        setNewExtra({ title: '', description: '', price: '' });
+        setModalVisible(false);
+        Alert.alert('Success', 'Extra added successfully');
+        setLoadingItems(prev => ({ ...prev, [data.id]: false }));
+      }
     } catch (error) {
       console.error('Error adding extra:', error);
       Alert.alert('Error', 'Failed to add extra. Please try again.');
-    } finally {
-      setLoading(false);
     }
   };
 
   const toggleExtraStatus = async (id: string) => {
     const extra = extras.find(e => e.id === id);
-    if (!extra) return;
+    if (!extra) {
+      Alert.alert('Error', 'Extra not found');
+      return;
+    }
 
-    setLoading(true);
+    setLoadingItems(prev => ({ ...prev, [id]: true }));
+    const newStatus = !extra.is_active;
+    
+    // Optimistically update the UI
+    setExtras(extras.map(e => 
+      e.id === id ? { ...e, is_active: newStatus } : e
+    ));
+
     try {
       const { error } = await supabase
         .from('extras')
-        .update({ is_active: !extra.is_active })
-        .eq('id', id);
+        .update({ is_active: newStatus })
+        .eq('id', id)
+        .select()
+        .single();
 
-      if (error) throw error;
-
-      setExtras(extras.map(e => 
-        e.id === id ? { ...e, is_active: !e.is_active } : e
-      ));
-    } catch (error) {
+      if (error) {
+        // Revert the optimistic update if there's an error
+        setExtras(extras.map(e => 
+          e.id === id ? { ...e, is_active: !newStatus } : e
+        ));
+        throw error;
+      }
+    } catch (error: any) {
       console.error('Error updating extra status:', error);
-      Alert.alert('Error', 'Failed to update extra status. Please try again.');
+      Alert.alert(
+        'Error',
+        error.message || 'Failed to update extra status. Please try again.',
+        [{ text: 'OK' }]
+      );
     } finally {
-      setLoading(false);
+      setLoadingItems(prev => ({ ...prev, [id]: false }));
     }
   };
 
@@ -108,11 +127,48 @@ export default function ExtrasTab({ extras, setExtras }: ExtrasTabProps) {
     return `$${price.toFixed(2)}`;
   };
 
-  const filteredExtras = extras.filter(extra => {
-    if (filter === 'all') return true;
-    if (filter === 'active') return extra.is_active;
-    return !extra.is_active;
-  });
+  const filteredExtras = useCallback(() => {
+    return extras.filter(extra => {
+      switch (filter) {
+        case 'active':
+          return extra.is_active;
+        case 'inactive':
+          return !extra.is_active;
+        default:
+          return true;
+      }
+    });
+  }, [extras, filter]);
+
+  const renderExtraItem = ({ item }: { item: Extra }) => (
+    <View style={[styles.extraItem, { backgroundColor: colors.card }]}>
+      <View style={styles.extraInfo}>
+        <Text style={[styles.extraTitle, { color: colors.text }]}>{item.title}</Text>
+        <Text style={[styles.extraDescription, { color: colors.lightText }]}>
+          {item.description}
+        </Text>
+        <Text style={[styles.extraPrice, { color: colors.primary }]}>
+          {formatPrice(item.price)}
+        </Text>
+      </View>
+      <TouchableOpacity
+        style={[
+          styles.statusButton,
+          { backgroundColor: item.is_active ? colors.primary : colors.border }
+        ]}
+        onPress={() => toggleExtraStatus(item.id)}
+        disabled={loadingItems[item.id]}
+      >
+        {loadingItems[item.id] ? (
+          <ActivityIndicator size="small" color="white" />
+        ) : (
+          <Text style={styles.statusButtonText}>
+            {item.is_active ? 'Active' : 'Inactive'}
+          </Text>
+        )}
+      </TouchableOpacity>
+    </View>
+  );
 
   return (
     <View style={styles.container}>
@@ -126,77 +182,42 @@ export default function ExtrasTab({ extras, setExtras }: ExtrasTabProps) {
       </View>
 
       <View style={styles.filterContainer}>
-        <TouchableOpacity
-          style={[
-            styles.filterButton,
-            filter === 'all' && { backgroundColor: colors.primary }
-          ]}
-          onPress={() => setFilter('all')}
-        >
-          <Text style={[
-            styles.filterButtonText,
-            filter === 'all' && { color: 'white' }
-          ]}>All</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.filterButton,
-            filter === 'active' && { backgroundColor: colors.primary }
-          ]}
-          onPress={() => setFilter('active')}
-        >
-          <Text style={[
-            styles.filterButtonText,
-            filter === 'active' && { color: 'white' }
-          ]}>Active</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.filterButton,
-            filter === 'inactive' && { backgroundColor: colors.primary }
-          ]}
-          onPress={() => setFilter('inactive')}
-        >
-          <Text style={[
-            styles.filterButtonText,
-            filter === 'inactive' && { color: 'white' }
-          ]}>Inactive</Text>
-        </TouchableOpacity>
+        {(['all', 'active', 'inactive'] as const).map((filterType) => (
+          <TouchableOpacity
+            key={filterType}
+            style={[
+              styles.filterButton,
+              filter === filterType && { backgroundColor: colors.primary }
+            ]}
+            onPress={() => setFilter(filterType)}
+          >
+            <Text style={[
+              styles.filterButtonText,
+              filter === filterType && { color: 'white' }
+            ]}>
+              {filterType.charAt(0).toUpperCase() + filterType.slice(1)}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
-      {loading && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
-      )}
-
       <FlatList
-        data={filteredExtras}
+        data={filteredExtras()}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View style={[styles.extraItem, { backgroundColor: colors.card }]}>
-            <View style={styles.extraInfo}>
-              <Text style={[styles.extraTitle, { color: colors.text }]}>{item.title}</Text>
-              <Text style={[styles.extraDescription, { color: colors.lightText }]}>
-                {item.description}
-              </Text>
-              <Text style={[styles.extraPrice, { color: colors.primary }]}>
-                {formatPrice(item.price)}
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={[
-                styles.statusButton,
-                { backgroundColor: item.is_active ? colors.primary : colors.border }
-              ]}
-              onPress={() => toggleExtraStatus(item.id)}
-            >
-              <Text style={styles.statusButtonText}>
-                {item.is_active ? 'Active' : 'Inactive'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        renderItem={renderExtraItem}
+        refreshing={false}
+        onRefresh={async () => {
+          try {
+            const { data, error } = await supabase
+              .from('extras')
+              .select('*');
+            if (error) throw error;
+            if (data) setExtras(data);
+          } catch (error) {
+            console.error('Error refreshing extras:', error);
+            Alert.alert('Error', 'Failed to refresh extras');
+          }
+        }}
       />
 
       <Modal

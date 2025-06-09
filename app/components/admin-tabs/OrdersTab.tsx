@@ -13,7 +13,6 @@ import {
   TextStyle,
   ViewStyle,
   ActivityIndicator,
-  PermissionsAndroid,
   RefreshControl,
   TextInput,
 } from 'react-native';
@@ -27,7 +26,7 @@ import { supabase } from '../../../utils/supabase';
 import * as XLSX from 'xlsx';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import * as MediaLibrary from 'expo-media-library';
+
 import Slider from '@react-native-community/slider';
 
 interface Order {
@@ -79,41 +78,11 @@ interface OrdersTabProps {
 
 const ORDERS_PER_PAGE = 10;
 
-// Add permission request function
-const requestStoragePermission = async () => {
-  if (Platform.OS === 'android') {
-    try {
-      const granted = await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
-        {
-          title: 'Storage Permission',
-          message: 'App needs access to storage to save Excel files.',
-          buttonNeutral: 'Ask Me Later',
-          buttonNegative: 'Cancel',
-          buttonPositive: 'OK',
-        }
-      );
-      return granted === PermissionsAndroid.RESULTS.GRANTED;
-    } catch (err) {
-      console.error('Permission error:', err);
-      return false;
-    }
-  } else if (Platform.OS === 'ios') {
-    const { status } = await MediaLibrary.requestPermissionsAsync();
-    return status === 'granted';
-  }
-  return true;
-};
+
 
 // Add the export function at the top level
 const exportToExcel = async (orders: Order[]) => {
   try {
-    // Request permissions first
-    const { status } = await MediaLibrary.requestPermissionsAsync();
-    if (status !== 'granted') {
-      throw new Error('Storage permission not granted');
-    }
-
     // Transform orders data for Excel
     const excelData = orders.map(order => ({
       'Order ID': order.order_ticket || order.id,
@@ -187,15 +156,6 @@ const exportToExcel = async (orders: Order[]) => {
         dialogTitle: 'Export Orders',
         UTI: 'com.microsoft.excel.xlsx'
       });
-
-      // Try to save to media library as well (might work on some devices)
-      try {
-        const asset = await MediaLibrary.createAssetAsync(filePath);
-        await MediaLibrary.createAlbumAsync('Mimi\'s Delivery', asset, false);
-      } catch (err) {
-        console.warn('Could not save to media library:', err);
-        // This is okay, we'll still have the share sheet
-      }
     } else {
       throw new Error('Sharing is not available on this device');
     }
@@ -720,11 +680,6 @@ export default function OrdersTab({ orders: initialOrders, setSelectedOrder, ope
   // Add function to export RoadWarrior format
   const exportToRoadWarrior = async (orders: Order[], numberOfDrivers: number) => {
     try {
-      const { status } = await MediaLibrary.requestPermissionsAsync();
-      if (status !== 'granted') {
-        throw new Error('Storage permission not granted');
-      }
-
       // Validate number of drivers
       if (orders.length < numberOfDrivers) {
         throw new Error(`Cannot assign ${numberOfDrivers} drivers to ${orders.length} orders`);
@@ -849,12 +804,7 @@ export default function OrdersTab({ orders: initialOrders, setSelectedOrder, ope
     } catch (error) {
       console.error('Export error:', error);
       if (error instanceof Error) {
-        if (error.message === 'Storage permission not granted') {
-          Alert.alert(
-            'Permission Required',
-            'Please grant storage permission to save Excel files to your device.'
-          );
-        } else if (error.message === 'Sharing is not available on this device') {
+        if (error.message === 'Sharing is not available on this device') {
           Alert.alert(
             'Error',
             'Sharing is not available on this device. Please try using a development build or the production app.'

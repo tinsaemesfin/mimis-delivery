@@ -2,7 +2,7 @@
   "expo": {
     "name": "Mimis Delivery",
     "slug": "mimis-delivery",
-    "version": "1.0.6",
+    "version": "1.0.7",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "light",
@@ -17,7 +17,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.mimisdelivery.app",
-      "buildNumber": "5",
+      "buildNumber": "6",
       "infoPlist": {
         "CFBundleURLTypes": [
           {
@@ -31,8 +31,7 @@
             ]
           }
         ],
-        "NSPhotoLibraryUsageDescription": "We need access to save Excel files to your device.",
-        "NSPhotoLibraryAddUsageDescription": "We need access to save Excel files to your device.",
+
         "ITSAppUsesNonExemptEncryption": false
       },
       "runtimeVersion": {
@@ -45,8 +44,8 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.mimisdelivery.app",
-      "versionCode": 6,
-      "runtimeVersion": "1.0.6",
+      "versionCode": 7,
+      "runtimeVersion": "1.0.7",
       "statusBar": {
         "barStyle": "dark-content",
         "translucent": true,
@@ -71,7 +70,11 @@
         "image": "./assets/images/splash-icon.png",
         "resizeMode": "contain",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ]
     },
     "web": {
       "favicon": "./assets/images/favicon.png"
@@ -79,15 +82,7 @@
     "scheme": "mimisdelivery",
     "plugins": [
       "expo-router",
-      "expo-document-picker",
-      [
-        "expo-media-library",
-        {
-          "photosPermission": false,
-          "savePhotosPermission": "We need access to save Excel files to your device.",
-          "isAccessMediaLocationEnabled": false
-        }
-      ]
+      "expo-document-picker"
     ],
     "extra": {
       "router": {

@@ -11,7 +11,8 @@ import {
   Alert,
   Platform,
   Modal,
-  Pressable
+  Pressable,
+  ActivityIndicator
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Colors } from '../../constants/Colors';
@@ -279,7 +280,7 @@ export default function AdminScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme || 'light'];
   const { user } = useAuth();
-  const { isAdmin, isSuperAdmin, loading } = useIsAdmin(user?.id);
+  const { isAdmin, isSuperAdmin, loading: adminAuthLoading } = useIsAdmin(user?.id);
   
   const [activeTab, setActiveTab] = useState<AdminTab>('animals');
   const [animals, setAnimals] = useState<Animal[]>(initialAnimals);
@@ -312,7 +313,8 @@ export default function AdminScreen() {
   const [newSlots, setNewSlots] = useState('');
 
   const [organs, setOrgans] = useState<Organ[]>(initialOrgans);
-  const [extras, setExtras] = useState<Extra[]>(initialExtras);
+  const [extras, setExtras] = useState<Extra[]>([]);
+  const [loadingExtras, setLoadingExtras] = useState(false);
   const [deliveryFee, setDeliveryFee] = useState<number>(0);
 
   // Filter orders when date filter or orders list changes
@@ -323,6 +325,42 @@ export default function AdminScreen() {
       setFilteredOrders(orders);
     }
   }, [dateFilterVisible, orders, startDate, endDate]);
+
+  // Function to fetch extras data
+  const fetchExtrasData = async () => {
+    if (!isAdmin && !isSuperAdmin) return; // Basic auth check
+    console.log("Attempting to fetch extras data...");
+    setLoadingExtras(true);
+    try {
+      const { data, error } = await supabase.from('extras').select('*');
+      if (error) {
+        console.error("Error fetching extras:", error);
+        Alert.alert('Error', 'Failed to fetch extras: ' + error.message);
+        throw error;
+      }
+      if (data) {
+        console.log("Extras data fetched successfully:", data);
+        // Ensure IDs are strings, if necessary, although Supabase usually handles UUIDs as strings
+        setExtras(data.map(ex => ({ ...ex, id: String(ex.id) })) as Extra[]);
+      } else {
+        console.log("No extras data returned from Supabase.");
+        setExtras([]); // Set to empty if no data
+      }
+    } catch (err) {
+      // Alert is already shown if error is from Supabase, this catches other potential errors
+      console.error('Caught an error in fetchExtrasData:', err);
+      // Alert.alert('Error', 'An unexpected error occurred while fetching extras.');
+    } finally {
+      setLoadingExtras(false);
+    }
+  };
+
+  // Effect to fetch extras when the extras tab is active
+  useEffect(() => {
+    if (activeTab === 'extras' && (isAdmin || isSuperAdmin)) {
+      fetchExtrasData();
+    }
+  }, [activeTab, isAdmin, isSuperAdmin]); // Rerun if tab or admin status changes
 
   // Function to handle adding a new animal
   const handleAddAnimal = () => {
@@ -797,10 +835,17 @@ export default function AdminScreen() {
           />
         )}
         {activeTab === 'extras' && (
-          <ExtrasTab
-            extras={extras}
-            setExtras={setExtras}
-          />
+          loadingExtras ? (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={{ marginTop: 10, color: colors.text }}>Loading extras...</Text>
+            </View>
+          ) : (
+            <ExtrasTab
+              extras={extras}
+              setExtras={setExtras}
+            />
+          )
         )}
         {activeTab === 'deliveryFee' && (
           <DeliveryFeeTab
