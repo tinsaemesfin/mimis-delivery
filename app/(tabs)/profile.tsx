@@ -58,6 +58,7 @@ export default function ProfileScreen() {
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [helpCenterVisible, setHelpCenterVisible] = useState(false);
   const [aboutUsVisible, setAboutUsVisible] = useState(false);
+  const [isDeleteModalVisible, setIsDeleteModalVisible] = useState(false);
   
   // Edit form state
   const [editFullName, setEditFullName] = useState('');
@@ -120,6 +121,43 @@ export default function ProfileScreen() {
       );
     } catch (error: any) {
       Alert.alert('Update Failed', error.message || 'Failed to update profile');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    setIsDeleteModalVisible(false); // Close the modal first
+    if (!user) {
+      Alert.alert('Error', 'You must be logged in to delete an account.');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const { error } = await supabase
+        .from('account_deletion_requests')
+        .insert({ user_id: user.id });
+
+      if (error) {
+        throw error;
+      }
+
+      Alert.alert(
+        'Request Submitted',
+        'Your account deletion request has been submitted. It will be processed within 48 hours.',
+        [
+          {
+            text: 'OK',
+            onPress: async () => {
+              await signOut();
+              router.replace('/sign-in');
+            },
+          },
+        ]
+      );
+    } catch (error: any) {
+      Alert.alert('Request Failed', error.message || 'Failed to submit deletion request.');
     } finally {
       setIsLoading(false);
     }
@@ -215,6 +253,12 @@ export default function ProfileScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'} />
       
+      {isLoading && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      )}
+
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         <View style={[styles.profileCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={[styles.profileIconContainer, { backgroundColor: colors.primary }]}>
@@ -247,7 +291,14 @@ export default function ProfileScreen() {
             () => setIsEditModalVisible(true)
           )}
           
+          {renderMenuItem(
+            'trash-outline',
+            'Delete Account',
+            'Request to permanently delete your account',
+            () => setIsDeleteModalVisible(true)
+          )}
           
+          <View style={[styles.separator, { backgroundColor: colors.border }]} />
         </View>
 
         <View style={[styles.menuSection, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -510,6 +561,38 @@ export default function ProfileScreen() {
             </View>
           </Pressable>
         </Pressable>
+      </Modal>
+
+      {/* Delete Account Confirmation Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={isDeleteModalVisible}
+        onRequestClose={() => setIsDeleteModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Delete Account</Text>
+            <Text style={[styles.modalMessage, { color: colors.lightText }]}>
+              Are you sure you want to request account deletion? This action cannot be undone. 
+              Your account and all associated data will be permanently removed within 48 hours.
+            </Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalButton, { backgroundColor: colors.lightGray }]}
+                onPress={() => setIsDeleteModalVisible(false)}
+              >
+                <Text style={[styles.modalButtonText, { color: colors.text }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, { backgroundColor: colors.danger }]}
+                onPress={handleDeleteAccount}
+              >
+                <Text style={[styles.modalButtonText, { color: '#FFF' }]}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -889,5 +972,47 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 24,
     marginBottom: 12,
+  },
+  separator: {
+    height: 1,
+    marginVertical: 8,
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+  },
+  modalMessage: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 25,
+    lineHeight: 22,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginHorizontal: 8,
+  },
+  modalButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  danger: {
+    color: '#dc3545',
   },
 }); 
